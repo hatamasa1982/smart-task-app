@@ -1108,12 +1108,13 @@
     // GAS環境判定
     const isGas = typeof google !== 'undefined' && google.script && google.script.run;
 
-    // ストレージキー
+    // ストレージキー & デフォルトAPI URL
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_pKRx8HeqMvgEUNsve331cFF6L4Js7-rL1U4MFHPHcWiJOaZKVsK0zoJW1HwOCgxJrw/exec';
 
-    // GAS Web API URL (初期値はローカルストレージから取得)
-    let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || '';
+    // GAS Web API URL (初期値はローカルストレージ、なければデフォルトURL)
+    let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
 
     // モックデータ (ローカルブラウザ確認・URL未設定時用)
     const MOCK_DATA = {
