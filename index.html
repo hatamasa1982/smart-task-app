@@ -1657,22 +1657,38 @@
       }
 
       // 期日ベースでグループ分け
-      // グループ定義: 期限切れ (Overdue), 今日 (Today), 明日 (Tomorrow), 今後 (Upcoming), 期日なし (NoDate)
-      const groups = {
-        overdue: { title: '期限切れ', icon: 'warning', list: [], class: 'overdue' },
-        today: { title: '今日', icon: 'today', list: [], class: 'today' },
-        tomorrow: { title: '明日', icon: 'event', list: [], class: 'upcoming' },
-        upcoming: { title: '今後', icon: 'calendar_month', list: [], class: 'upcoming' },
-        nodate: { title: '期日なし', icon: 'question_mark', list: [], class: 'nodate' }
-      };
-
+      // グループ定義: 期限切れ, 今日, 明日, 明後日, 3日後, 4日後, 5日後, それ以降, 期日なし
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      const todayStr = formatDateString(now);
 
-      const tomorrow = new Date(now.getTime());
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = formatDateString(tomorrow);
+      const dayNames = ['今日', '明日', '明後日', '3日後', '4日後', '5日後'];
+      const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
+
+      const groups = {
+        overdue: { title: '期限切れ', icon: 'warning', list: [], class: 'overdue' }
+      };
+
+      const dateToGroupKey = {};
+      for (let i = 0; i <= 5; i++) {
+        const d = new Date(now.getTime());
+        d.setDate(d.getDate() + i);
+        const dStr = formatDateString(d);
+        const label = `${dayNames[i]} (${d.getMonth() + 1}/${d.getDate()}・${weekDays[d.getDay()]})`;
+        const key = `day_${i}`;
+
+        groups[key] = {
+          title: label,
+          icon: i === 0 ? 'today' : (i === 1 ? 'event' : 'calendar_today'),
+          list: [],
+          class: i === 0 ? 'today' : 'upcoming'
+        };
+        dateToGroupKey[dStr] = key;
+      }
+
+      groups.later = { title: 'それ以降（6日後〜）', icon: 'calendar_month', list: [], class: 'upcoming' };
+      groups.nodate = { title: '期日なし', icon: 'question_mark', list: [], class: 'nodate' };
+
+      const todayStr = formatDateString(now);
 
       filtered.forEach(task => {
         if (!task.date) {
@@ -1681,12 +1697,10 @@
           const taskDateStr = task.date; // yyyy-MM-dd
           if (taskDateStr < todayStr) {
             groups.overdue.list.push(task);
-          } else if (taskDateStr === todayStr) {
-            groups.today.list.push(task);
-          } else if (taskDateStr === tomorrowStr) {
-            groups.tomorrow.list.push(task);
+          } else if (dateToGroupKey[taskDateStr]) {
+            groups[dateToGroupKey[taskDateStr]].list.push(task);
           } else {
-            groups.upcoming.list.push(task);
+            groups.later.list.push(task);
           }
         }
       });
@@ -1844,7 +1858,7 @@
     // タスクカードのDOM作成
     function createTaskCard(task, groupKey) {
       const card = document.createElement('div');
-      card.className = `task-card ${task.type} ${groupKey === 'overdue' ? 'overdue' : ''} ${groupKey === 'today' ? 'today' : ''}`;
+      card.className = `task-card ${task.type} ${groupKey === 'overdue' ? 'overdue' : ''} ${(groupKey === 'today' || groupKey === 'day_0') ? 'today' : ''}`;
       card.id = `task-card-${task.id}`;
       card.setAttribute('data-id', task.id);
       
