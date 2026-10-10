@@ -1190,6 +1190,19 @@
 
       // 2. 外部環境（GitHub Pages等）でGAS Web API URLが設定されている場合
       if (gasApiUrl) {
+        // データ取得 (getInitialData) は高速かつリダイレクトに強い GET で取得
+        if (action === 'getInitialData') {
+          const sep = gasApiUrl.includes('?') ? '&' : '?';
+          const res = await fetch(`${gasApiUrl}${sep}action=getInitialData`);
+          const json = await res.json();
+          if (json && json.success) {
+            return json.data;
+          } else {
+            throw new Error((json && json.error) || 'データ取得に失敗しました');
+          }
+        }
+
+        // 追加・更新・削除などの操作は POST で送信
         const res = await fetch(gasApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1349,7 +1362,11 @@
       if (cached) {
         try {
           const cachedData = JSON.parse(cached);
-          if (cachedData.tasks && cachedData.projects) {
+          // 初期のモックキャッシュが残っている場合は破棄して本番取得を優先
+          const isMockCache = cachedData.tasks && cachedData.tasks.some(t => t.id === "1" && t.task === "朝のスクワット・ストレッチ");
+          if (isMockCache) {
+            localStorage.removeItem(CACHE_DATA_KEY);
+          } else if (cachedData.tasks && cachedData.projects) {
             state.tasks = cachedData.tasks;
             state.projects = cachedData.projects;
             state.doneTasks = cachedData.doneTasks || [];
@@ -1362,7 +1379,7 @@
       }
       
       if (!hasCache && !gasApiUrl && !isGas) {
-        // 初回かつ未設定時はモックデータで初期化
+        // 初回かつURL未設定時のみモックデータで初期化
         state.tasks = [...MOCK_DATA.tasks];
         state.projects = [...MOCK_DATA.projects];
         state.doneTasks = [...MOCK_DATA.doneTasks];
@@ -1388,9 +1405,7 @@
         }
       } catch (err) {
         console.error('初期データ取得エラー:', err);
-        if (shouldShowLoading) {
-          showToast('接続エラー: ' + err.message);
-        }
+        showToast('接続エラー: ' + err.message);
       } finally {
         showLoading(false);
         showSyncing(false);
