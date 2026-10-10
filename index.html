@@ -331,6 +331,39 @@
     .task-card.today .date-badge { color: var(--status-today); }
     .task-card.upcoming .date-badge { color: var(--status-upcoming); }
 
+    /* 優先度 (Context) バッジ */
+    .context-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+    .context-badge.priority-highest {
+      background: rgba(239, 68, 68, 0.22);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .context-badge.priority-high {
+      background: rgba(245, 158, 11, 0.22);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .context-badge.priority-normal {
+      background: rgba(59, 130, 246, 0.18);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+    .context-badge.priority-other {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-sub);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
     /* ----------------------------------
        新規作成ボタン (FAB)
     ---------------------------------- */
@@ -1033,10 +1066,15 @@
           </select>
         </div>
 
-        <!-- 詳細説明 -->
-        <div class="form-group">
-          <label class="form-label" for="task-desc-input">詳細説明</label>
-          <textarea id="task-desc-input" class="form-textarea" rows="3" placeholder="タスクの詳細メモ（カレンダーの説明欄に同期されます）"></textarea>
+        <!-- 優先度 / Context -->
+        <div class="form-group" style="margin-top: 18px;">
+          <label class="form-label" for="task-context-select">優先度 (Context)</label>
+          <select id="task-context-select" class="form-select">
+            <option value="">なし</option>
+            <option value="最優先">🔥 最優先</option>
+            <option value="優先">⭐ 優先</option>
+            <option value="隙間時間">☕ 隙間時間</option>
+          </select>
         </div>
 
         <!-- 続けて登録するチェックボックス -->
@@ -1419,9 +1457,72 @@
       renderHistoryList();
       populateProjectSelect();
       populateFilterProjectSelect();
+      populateContextSelect();
       
       // 日付フィルターの初期値に今日をセット
       document.getElementById('task-date-filter-input').value = formatDateString(new Date());
+    }
+
+    // 優先度 (Context) バッジのCSSクラス判定
+    function getContextBadgeClass(contextName) {
+      if (!contextName) return '';
+      if (contextName.includes('最優先')) return 'priority-highest';
+      if (contextName.includes('優先')) return 'priority-high';
+      if (contextName.includes('隙間') || contextName.includes('すきま')) return 'priority-normal';
+      return 'priority-other';
+    }
+
+    // 優先度のソート順ランク付け（最優先が一番上）
+    function getPriorityRank(task) {
+      const desc = task.description || '';
+      if (desc.includes('最優先')) return 1;
+      if (desc.includes('優先')) return 2;
+      if (desc.includes('隙間') || desc.includes('すきま')) return 3;
+      if (desc.trim() !== '') return 4;
+      return 5;
+    }
+
+    // 優先度プルダウンの動的生成
+    function populateContextSelect() {
+      const select = document.getElementById('task-context-select');
+      if (!select) return;
+      const currentVal = select.value;
+      select.innerHTML = '';
+
+      // 基本の選択肢
+      const defaultOptions = [
+        { value: '', label: 'なし' },
+        { value: '最優先', label: '🔥 最優先' },
+        { value: '優先', label: '⭐ 優先' },
+        { value: '隙間時間', label: '☕ 隙間時間' }
+      ];
+
+      const addedValues = new Set();
+      defaultOptions.forEach(opt => {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.innerText = opt.label;
+        select.appendChild(el);
+        if (opt.value) addedValues.add(opt.value);
+      });
+
+      // スプレッドシートのコンテキストシートから動的追加
+      if (state.contexts && Array.isArray(state.contexts)) {
+        state.contexts.forEach(c => {
+          const val = c.name || c.id;
+          if (val && !addedValues.has(val)) {
+            const el = document.createElement('option');
+            el.value = val;
+            el.innerText = `🏷️ ${val}`;
+            select.appendChild(el);
+            addedValues.add(val);
+          }
+        });
+      }
+
+      if (currentVal) {
+        select.value = currentVal;
+      }
     }
 
     // ----------------------------------
@@ -1577,6 +1678,9 @@
       Object.keys(groups).forEach(key => {
         const group = groups[key];
         if (group.list.length > 0) {
+          // グループ内を優先度順（最優先→優先→その他）にソート
+          group.list.sort((a, b) => getPriorityRank(a) - getPriorityRank(b));
+
           // グループヘッダー
           const header = document.createElement('div');
           header.className = `task-section-header ${group.class}`;
@@ -1745,7 +1849,14 @@
           <span class="material-symbols-outlined">done</span>
         </button>
         <div class="task-info" onclick="openEditModal('${task.id}')">
-          <div class="task-title">${escapeHtml(task.task)}</div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+            <div class="task-title">${escapeHtml(task.task)}</div>
+            ${task.description ? `
+              <span class="context-badge ${getContextBadgeClass(task.description)}">
+                ${escapeHtml(task.description)}
+              </span>
+            ` : ''}
+          </div>
           <div class="task-meta">
             <span class="project-badge">#${escapeHtml(projName.replace(/^#/, ''))}</span>
             ${task.date ? `
@@ -1822,7 +1933,14 @@
             <span>#${escapeHtml(task.projectName.replace(/^#/, ''))} (${task.type})</span>
             <span>${dateDisplay} ${task.startTime || ''}</span>
           </div>
-          <div class="done-task-title">${escapeHtml(task.task)}</div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+            <div class="done-task-title">${escapeHtml(task.task)}</div>
+            ${task.description ? `
+              <span class="context-badge ${getContextBadgeClass(task.description)}">
+                ${escapeHtml(task.description)}
+              </span>
+            ` : ''}
+          </div>
         `;
         container.appendChild(card);
       });
@@ -1866,7 +1984,8 @@
       document.getElementById('task-start-input').value = '';
       document.getElementById('task-end-input').value = '';
       document.getElementById('task-repeat-select').value = 'None';
-      document.getElementById('task-desc-input').value = '';
+      populateContextSelect();
+      document.getElementById('task-context-select').value = '';
       
       // おもてなし機能：プロジェクト別フィルターで選択されているプロジェクトがあれば、そのプロジェクトと区分を初期値に自動割り当て
       if (state.viewMode === 'project') {
@@ -1912,7 +2031,22 @@
       document.getElementById('task-start-input').value = task.startTime;
       document.getElementById('task-end-input').value = task.endTime;
       document.getElementById('task-repeat-select').value = task.repeat;
-      document.getElementById('task-desc-input').value = task.description;
+      
+      // 優先度 (Context) の選択
+      populateContextSelect();
+      const ctxSelect = document.getElementById('task-context-select');
+      if (task.description) {
+        const exists = Array.from(ctxSelect.options).some(o => o.value === task.description);
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = task.description;
+          opt.innerText = `🏷️ ${task.description}`;
+          ctxSelect.appendChild(opt);
+        }
+        ctxSelect.value = task.description;
+      } else {
+        ctxSelect.value = '';
+      }
       
       document.getElementById('save-btn-text').innerText = '保存';
       
@@ -1991,7 +2125,7 @@
         startTime: document.getElementById('task-start-input').value,
         endTime: document.getElementById('task-end-input').value,
         repeat: document.getElementById('task-repeat-select').value,
-        description: document.getElementById('task-desc-input').value
+        description: document.getElementById('task-context-select').value
       };
 
       // 新規作成かつ「続けて別のタスクを登録する」にチェックが入っているか判定
@@ -2014,7 +2148,7 @@
         
         if (keepOpen) {
           document.getElementById('task-title-input').value = '';
-          document.getElementById('task-desc-input').value = '';
+          document.getElementById('task-context-select').value = '';
           document.getElementById('task-start-input').value = '';
           document.getElementById('task-end-input').value = '';
           showToast('タスクを追加しました');
