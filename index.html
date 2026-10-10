@@ -1463,6 +1463,23 @@
       document.getElementById('task-date-filter-input').value = formatDateString(new Date());
     }
 
+    // 表示用の日付フォーマット（今年と異なる年は「2027/1/1(金)」のように年を明記）
+    function formatDateDisplay(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr.replace(/-/g, "/"));
+      if (isNaN(d.getTime())) return dateStr;
+
+      const currentYear = new Date().getFullYear();
+      const taskYear = d.getFullYear();
+      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+
+      if (taskYear !== currentYear) {
+        return `${taskYear}/${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
+      } else {
+        return `${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
+      }
+    }
+
     // 優先度 (Context) バッジのCSSクラス判定
     function getContextBadgeClass(contextName) {
       if (!contextName) return '';
@@ -1678,8 +1695,15 @@
       Object.keys(groups).forEach(key => {
         const group = groups[key];
         if (group.list.length > 0) {
-          // グループ内を優先度順（最優先→優先→その他）にソート
-          group.list.sort((a, b) => getPriorityRank(a) - getPriorityRank(b));
+          // グループ内を優先度順、同順位なら期日順（年を含む昇順）にソート
+          group.list.sort((a, b) => {
+            const rankDiff = getPriorityRank(a) - getPriorityRank(b);
+            if (rankDiff !== 0) return rankDiff;
+            if (!a.date && !b.date) return 0;
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return a.date.localeCompare(b.date);
+          });
 
           // グループヘッダー
           const header = document.createElement('div');
@@ -1827,13 +1851,8 @@
       // プロジェクト名
       const projName = task.projectName || state.projects.find(p => p.id === task.projectId)?.name || '未分類';
       
-      // 期日の曜日付き日本語フォーマット
-      let dateDisplay = '';
-      if (task.date) {
-        const d = new Date(task.date.replace(/-/g, "/"));
-        const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-        dateDisplay = `${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
-      }
+      // 期日の曜日付き日本語フォーマット（年を考慮）
+      const dateDisplay = formatDateDisplay(task.date);
 
       // 時間帯の表示
       let timeDisplay = '';
@@ -1921,12 +1940,7 @@
         const card = document.createElement('div');
         card.className = 'done-task-card';
         
-        let dateDisplay = '';
-        if (task.date) {
-          const d = new Date(task.date.replace(/-/g, "/"));
-          const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-          dateDisplay = `${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
-        }
+        let dateDisplay = formatDateDisplay(task.date);
         
         card.innerHTML = `
           <div class="done-task-header">
