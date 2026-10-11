@@ -1153,9 +1153,13 @@
     // ストレージキー & デフォルトAPI URL
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
-    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbx_pKRx8HeqMvgEUNsve331cFF6L4Js7-rL1U4MFHPHcWiJOaZKVsK0zoJW1HwOCgxJrw/exec';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
 
-    // GAS Web API URL (初期値はローカルストレージ、なければデフォルトURL)
+    // GAS Web API URL (古い無効URLがキャッシュされている場合は新URLに自動移行)
+    const storedGasUrl = localStorage.getItem(GAS_URL_KEY);
+    if (!storedGasUrl || storedGasUrl.includes('AKfycbx_pKRx8HeqMvgEUNsve331cFF6L4Js7-rL1U4MFHPHcWiJOaZKVsK0zoJW1HwOCgxJrw')) {
+      localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL);
+    }
     let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
 
     // モックデータ (ローカルブラウザ確認・URL未設定時用)
