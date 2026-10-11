@@ -595,7 +595,7 @@ function doGet(e) {
   // 2. 従来のGASウェブアプリとして直接開かれた場合はHTMLを配信
   return HtmlService.createTemplateFromFile('index')
     .evaluate()
-    .setTitle('タスク・プロジェクト管理')
+    .setTitle('プロジェクト・タスク管理')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

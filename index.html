@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>タスク・プロジェクト管理</title>
+  <title>プロジェクト・タスク管理</title>
   
   <!-- Google Fonts & Material Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,8 +11,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
 
-  <!-- SortableJS (ドラッグ＆ドロップ用) -->
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
   <style>
     /* ----------------------------------
@@ -795,20 +793,6 @@
       margin-bottom: 12px;
     }
 
-    /* ドラッグ＆ドロップ用プレースホルダー */
-    .sortable-ghost {
-      opacity: 0.3;
-      background: rgba(59, 130, 246, 0.1) !important;
-      border: 2px dashed rgba(59, 130, 246, 0.4) !important;
-    }
-    
-    /* ドラッグ可能であることを示すカーソル */
-    .task-info {
-      cursor: grab;
-    }
-    .task-info:active {
-      cursor: grabbing;
-    }
 
     /* 同期中インジケータ */
     .sync-indicator {
@@ -884,7 +868,7 @@
   <header>
     <div class="header-logo">
       <span class="material-symbols-outlined icon">task_alt</span>
-      <h1 id="app-title">タスク管理</h1>
+      <h1 id="app-title">プロジェクト・タスク管理</h1>
       <!-- 同期中インジケータ -->
       <div id="sync-indicator" class="sync-indicator">
         <span class="material-symbols-outlined spin-icon">sync</span>
@@ -910,10 +894,10 @@
         <div class="filter-tab" onclick="setFilterType('Private')">Private</div>
       </div>
 
-      <!-- 表示モード切り替え（期日別 / 日付指定 / プロジェクト別） -->
+      <!-- 表示モード切り替え（期日順 / 日付指定 / プロジェクト別） -->
       <div class="filter-tabs" style="margin-top: 8px; background: rgba(255, 255, 255, 0.02);">
         <div class="filter-tab active" id="mode-tab-group" onclick="setViewMode('group')">
-          <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">format_list_bulleted</span>期日別
+          <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">format_list_bulleted</span>期日順
         </div>
         <div class="filter-tab" id="mode-tab-date" onclick="setViewMode('date')">
           <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">calendar_month</span>日付指定
@@ -1183,7 +1167,7 @@
       projects: [],
       doneTasks: [],
       filterType: 'All', // 'All', 'Biz', 'Private'
-      viewMode: 'group', // 'group' (期日別), 'date' (日付指定), 'project' (プロジェクト別)
+      viewMode: 'group', // 'group' (期日順), 'date' (日付指定), 'project' (プロジェクト別)
       activePage: 'tasks', // 'tasks', 'projects', 'history'
       formTaskType: 'Private',
       newProjectType: 'Private'
@@ -1499,6 +1483,35 @@
       return 5;
     }
 
+    // タスクの並び順比較関数（時間が最優先、時間未入力の場合はコンテキスト優先）
+    function compareTasksByTimeAndPriority(a, b) {
+      const aTime = (a.startTime || '').trim();
+      const bTime = (b.startTime || '').trim();
+
+      // 1. 両方に開始時間がある場合：時間順（早い順）
+      if (aTime && bTime) {
+        const timeDiff = aTime.localeCompare(bTime);
+        if (timeDiff !== 0) return timeDiff;
+        // 開始時間が同一の場合はコンテキスト順
+        return getPriorityRank(a) - getPriorityRank(b);
+      }
+
+      // 2. 片方だけ時間がある場合：時間ありを優先（上）に配置
+      if (aTime && !bTime) return -1;
+      if (!aTime && bTime) return 1;
+
+      // 3. 両方とも時間がない場合：コンテキスト（最優先 > 優先 > 隙間時間）順
+      const rankDiff = getPriorityRank(a) - getPriorityRank(b);
+      if (rankDiff !== 0) return rankDiff;
+
+      // 4. コンテキストも同一で、日付が異なるタスク同士（例: 「それ以降」）の場合は期日順
+      if (a.date && b.date && a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+
+      return 0;
+    }
+
     // 優先度プルダウンの動的生成
     function populateContextSelect() {
       const select = document.getElementById('task-context-select');
@@ -1639,12 +1652,9 @@
       } else if (state.viewMode === 'project') {
         renderProjectTaskList(filtered, container);
       }
-
-      // ドラッグ＆ドロップ機能の有効化
-      initSortable();
     }
 
-    // 期日別グループ表示
+    // 期日順グループ表示
     function renderGroupedTaskList(filtered, container) {
       if (filtered.length === 0) {
         container.innerHTML = `
@@ -1709,15 +1719,8 @@
       Object.keys(groups).forEach(key => {
         const group = groups[key];
         if (group.list.length > 0) {
-          // グループ内を優先度順、同順位なら期日順（年を含む昇順）にソート
-          group.list.sort((a, b) => {
-            const rankDiff = getPriorityRank(a) - getPriorityRank(b);
-            if (rankDiff !== 0) return rankDiff;
-            if (!a.date && !b.date) return 0;
-            if (!a.date) return 1;
-            if (!b.date) return -1;
-            return a.date.localeCompare(b.date);
-          });
+          // グループ内を「時間優先、時間未入力の場合はコンテキスト優先」にソート
+          group.list.sort(compareTasksByTimeAndPriority);
 
           // グループヘッダー
           const header = document.createElement('div');
@@ -1756,6 +1759,8 @@
       }
 
       const dateTasks = filtered.filter(t => t.date === dateVal);
+      // 時間優先、時間未入力の場合はコンテキスト優先でソート
+      dateTasks.sort(compareTasksByTimeAndPriority);
       
       const d = new Date(dateVal.replace(/-/g, "/"));
       const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
@@ -1808,11 +1813,14 @@
       const projName = project ? project.name : '不明なプロジェクト';
       const projTasks = filtered.filter(t => t.projectId === projectId);
 
-      // 期日順にソート（期日がないタスクは最後に）
+      // 期日順にソート（期日がないタスクは最後に、同一期日内は時間優先・コンテキスト優先）
       projTasks.sort((a, b) => {
+        if (!a.date && !b.date) return compareTasksByTimeAndPriority(a, b);
         if (!a.date) return 1;
         if (!b.date) return -1;
-        return a.date.localeCompare(b.date);
+        const dateDiff = a.date.localeCompare(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        return compareTasksByTimeAndPriority(a, b);
       });
 
       // セクションヘッダー
@@ -2375,47 +2383,6 @@
       setTimeout(() => {
         toast.classList.remove('active');
       }, 3000);
-    }
-
-    // ドラッグ＆ドロップ（Sortable）の初期化
-    function initSortable() {
-      const lists = document.querySelectorAll('.task-list');
-      lists.forEach(listEl => {
-        Sortable.create(listEl, {
-          animation: 150,
-          handle: '.task-info',
-          ghostClass: 'sortable-ghost',
-          onEnd: function(evt) {
-            saveNewSortOrder(evt.from);
-          }
-        });
-      });
-    }
-
-    // 新しい並び順を同期して保存
-    async function saveNewSortOrder(listEl) {
-      const cards = listEl.querySelectorAll('.task-card');
-      const idList = Array.from(cards).map(card => card.getAttribute('data-id')).filter(Boolean);
-      
-      if (idList.length === 0) return;
-      
-      showSyncing(true);
-      try {
-        const data = await callBackendApi('updateSortOrder', { idList });
-        if (data) {
-          state.tasks = data.tasks;
-          state.projects = data.projects;
-          state.doneTasks = data.doneTasks || [];
-          localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-        }
-        showToast('並び順を同期しました');
-      } catch (err) {
-        console.error("並び順保存エラー: " + err.message);
-        showToast("並び順の保存に失敗しました");
-        renderTaskList();
-      } finally {
-        showSyncing(false);
-      }
     }
   </script>
 </body>
