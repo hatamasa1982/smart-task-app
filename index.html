@@ -1127,8 +1127,28 @@
 
   <!-- ==================== JavaScript ロジック ==================== -->
   <script>
-    // GAS環境判定
-    const isGas = typeof google !== 'undefined' && google.script && google.script.run;
+    // GAS環境判定（google.script.run または Googleホスト名）
+    function isGasEnvironment() {
+      if (typeof google !== 'undefined' && google && google.script && google.script.run) {
+        return true;
+      }
+      const host = window.location.hostname;
+      if (host.includes('googleusercontent.com') || host.includes('script.google.com')) {
+        return true;
+      }
+      return false;
+    }
+
+    // GAS実行オブジェクトを取得（読み込み遅延に対応）
+    async function getGasRunner() {
+      for (let i = 0; i < 30; i++) {
+        if (typeof google !== 'undefined' && google && google.script && google.script.run) {
+          return google.script.run;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return null;
+    }
 
     // ストレージキー & デフォルトAPI URL
     const GAS_URL_KEY = 'smart_task_gas_api_url';
@@ -1179,35 +1199,34 @@
 
     async function callBackendApi(action, payload = {}) {
       // 1. GAS実行環境内（直接埋め込み実行時）
-      if (isGas) {
-        return new Promise((resolve, reject) => {
-          const runner = google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject);
-          if (action === 'getInitialData') {
-            runner.getInitialData();
-          } else if (action === 'saveTask') {
-            if (payload.taskData && payload.taskData.id) {
-              runner.updateTaskFromApp(payload.taskData);
+      if (isGasEnvironment()) {
+        const runner = await getGasRunner();
+        if (runner) {
+          return new Promise((resolve, reject) => {
+            const api = runner
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject);
+            if (action === 'getInitialData') {
+              api.getInitialData();
+            } else if (action === 'saveTask') {
+              if (payload.taskData && payload.taskData.id) {
+                api.updateTaskFromApp(payload.taskData);
+              } else {
+                api.addNewTaskFromApp(payload.taskData);
+              }
+            } else if (action === 'completeTask' || action === 'toggleTaskStatus') {
+              api.completeTaskFromApp(payload.taskId);
+            } else if (action === 'deleteTask') {
+              api.deleteTaskFromApp(payload.taskId);
+            } else if (action === 'saveProject') {
+              api.addNewProjectFromApp(payload.projectData);
             } else {
-              runner.addNewTaskFromApp(payload.taskData);
+              reject(new Error('未対応のアクションです: ' + action));
             }
-          } else if (action === 'completeTask' || action === 'toggleTaskStatus') {
-            runner.completeTaskFromApp(payload.taskId);
-          } else if (action === 'deleteTask') {
-            runner.deleteTaskFromApp(payload.taskId);
-          } else if (action === 'saveProject') {
-            runner.addNewProjectFromApp(payload.projectData);
-          } else if (action === 'updateSortOrder') {
-            if (typeof runner.updateSortOrderFromApp === 'function') {
-              runner.updateSortOrderFromApp(payload.idList);
-            } else {
-              runner.getInitialData();
-            }
-          } else {
-            reject(new Error('未対応のアクションです: ' + action));
-          }
-        });
+          });
+        } else {
+          throw new Error('Google Apps Script連携の準備中です。少し待って再読み込みしてください。');
+        }
       }
 
       // 2. 外部環境（GitHub Pages等）でGAS Web API URLが設定されている場合
@@ -1312,7 +1331,7 @@
     function updateConnectionBadge() {
       const badge = document.getElementById('connection-status-badge');
       if (!badge) return;
-      if (isGas) {
+      if (isGasEnvironment()) {
         badge.innerHTML = `
           <span class="status-badge-pill status-badge-connected">
             <span class="material-symbols-outlined" style="font-size: 14px;">cloud_done</span>
@@ -1400,7 +1419,7 @@
         }
       }
       
-      if (!hasCache && !gasApiUrl && !isGas) {
+      if (!hasCache && !gasApiUrl && !isGasEnvironment()) {
         // 初回かつURL未設定時のみモックデータで初期化
         state.tasks = [...MOCK_DATA.tasks];
         state.projects = [...MOCK_DATA.projects];
@@ -1427,7 +1446,11 @@
         }
       } catch (err) {
         console.error('初期データ取得エラー:', err);
-        showToast('接続エラー: ' + err.message);
+        const cached = localStorage.getItem(CACHE_DATA_KEY);
+        // キャッシュデータが手元にない時のみエラーを表示
+        if (!cached) {
+          showToast('同期エラー: ' + err.message);
+        }
       } finally {
         showLoading(false);
         showSyncing(false);
