@@ -1427,6 +1427,25 @@
         initApp();
       }
 
+      // プロジェクト選択時に区分（Private/Biz）を自動連動
+      const taskProjSelect = document.getElementById('task-project-select');
+      if (taskProjSelect) {
+        taskProjSelect.addEventListener('change', (e) => {
+          const selectedId = e.target.value;
+          const proj = state.projects.find(p => String(p.id) === String(selectedId));
+          if (proj && proj.type) {
+            state.formTaskType = proj.type;
+            const btns = document.querySelectorAll('#task-type-segment .segment-btn');
+            btns.forEach(btn => {
+              btn.classList.remove('active');
+              if (btn.classList.contains(proj.type)) {
+                btn.classList.add('active');
+              }
+            });
+          }
+        });
+      }
+
       // 2. サーバーから最新データを取得・同期
       fetchInitialData(!hasCache);
     });
@@ -2014,8 +2033,14 @@
       const select = document.getElementById('task-project-select');
       select.innerHTML = '';
       
-      // 表示中のセグメントタイプ（Private または Biz）に一致するプロジェクトのみを表示
-      const filteredProj = state.projects.filter(p => p.type === state.formTaskType);
+      // 表示中のセグメントタイプ（Private または Biz）に一致するプロジェクトを表示
+      const currentType = String(state.formTaskType || '').toLowerCase();
+      let filteredProj = state.projects.filter(p => String(p.type || '').toLowerCase() === currentType);
+      
+      // もし該当区分のプロジェクトが空の場合は全プロジェクトを候補にする
+      if (filteredProj.length === 0) {
+        filteredProj = state.projects;
+      }
       
       filteredProj.forEach(p => {
         const opt = document.createElement('option');
@@ -2083,8 +2108,21 @@
       // 編集時は連続登録チェックボックスを非表示にする
       document.getElementById('keep-open-group').style.display = 'none';
 
-      setFormTaskType(task.type);
-      document.getElementById('task-project-select').value = task.projectId;
+      // 1. プロジェクトを特定（IDまたはプロジェクト名でマッチ）
+      let matchedProj = state.projects.find(p => String(p.id) === String(task.projectId));
+      if (!matchedProj && task.projectName) {
+        matchedProj = state.projects.find(p => p.name === task.projectName);
+      }
+
+      const initialType = (matchedProj && matchedProj.type) ? matchedProj.type : (task.type || 'Private');
+      setFormTaskType(initialType);
+
+      const projSelect = document.getElementById('task-project-select');
+      if (matchedProj) {
+        projSelect.value = matchedProj.id;
+      } else if (task.projectId) {
+        projSelect.value = task.projectId;
+      }
       document.getElementById('task-title-input').value = task.task;
       document.getElementById('task-date-input').value = task.date;
       document.getElementById('task-start-input').value = task.startTime;

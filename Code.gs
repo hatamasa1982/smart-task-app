@@ -504,9 +504,13 @@ function sortByDateAndContext(targetSheet) {
     }
   }
 
-  // 既存のフィルターを一時解除
-  const existingFilter = sheet.getFilter();
-  if (existingFilter) existingFilter.remove();
+  // 既存のフィルターを一時解除（安全に実行）
+  try {
+    const existingFilter = sheet.getFilter();
+    if (existingFilter) existingFilter.remove();
+  } catch (e) {
+    console.warn("フィルター解除スキップ: " + e.message);
+  }
 
   const lastRow = getRealLastRow(sheet);
   const lastCol = sheet.getLastColumn();
@@ -547,18 +551,30 @@ function sortByDateAndContext(targetSheet) {
 
   range.setValues(values);
 
-  // フィルターを再作成
-  const filterRange = sheet.getRange(1, 1, lastRow, lastCol);
-  filterRange.createFilter();
+  // フィルターを再作成（安全に実行）
+  try {
+    const filterRange = sheet.getRange(1, 1, lastRow, lastCol);
+    filterRange.createFilter();
+  } catch (e) {
+    console.warn("フィルター再作成スキップ: " + e.message);
+  }
 
-  ss.toast(`「${sheet.getName()}」シートを並び替えました。`, "処理完了");
+  try {
+    ss.toast(`「${sheet.getName()}」シートを並び替えました。`, "処理完了");
+  } catch (e) {
+    // Web APIからの実行時はtoastが使用できないため無視
+  }
 }
 
 function sortAll(sheet) {
-  if (sheet) {
-    sortByDateAndContext(sheet);
-  } else {
-    sortAllSheets();
+  try {
+    if (sheet) {
+      sortByDateAndContext(sheet);
+    } else {
+      sortAllSheets();
+    }
+  } catch (err) {
+    console.warn("並び替え処理スキップ: " + err.message);
   }
 }
 
@@ -784,7 +800,8 @@ function addNewTaskFromApp(taskData) {
   const taskType = taskData.type || getProjectTypeById(ss, taskData.projectId);
   const sheet = getOrCreateTaskSheetByType(ss, taskType);
   
-  const newId = Utilities.getUuid().split('-')[0];
+  // 既存のIDがあれば引き継ぎ、なければ新規発行
+  const newId = taskData.id ? String(taskData.id) : Utilities.getUuid().split('-')[0];
   const row = getRealLastRow(sheet) + 1;
   
   const dateVal = taskData.date ? new Date(taskData.date.replace(/-/g, "/")) : "";
@@ -796,7 +813,7 @@ function addNewTaskFromApp(taskData) {
   newRow[CONFIG.COL_STATUS - 1] = "FALSE";
   newRow[CONFIG.COL_REPEAT - 1] = taskData.repeat || "None";
   newRow[CONFIG.COL_TYPE - 1] = taskType;
-  newRow[CONFIG.COL_PROJECT_NAME - 1] = ""; // ARRAYFORMULA用
+  newRow[CONFIG.COL_PROJECT_NAME - 1] = ""; // ARRAYFORMULA用（空文字）
   newRow[CONFIG.COL_PROJECT - 1] = taskData.projectId || "";
   newRow[CONFIG.COL_TASK - 1] = taskData.task || "";
   newRow[CONFIG.COL_DATE_E - 1] = dateVal;
@@ -828,24 +845,54 @@ function parseTimeStringToDate(dateString, timeString) {
 }
 
 /**
- * タスクIDから該当シートと行番号を検索
+ * タスクIDから該当シートと行番号を検索（見つからない場合はタスク名でフォールバック検索）
  */
-function findTaskLocationById(ss, taskId) {
+function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate) {
   const candidateNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME];
-  for (let name of candidateNames) {
-    const sheet = ss.getSheetByName(name);
-    if (!sheet) continue;
+  
+  // 1. まず taskId で完全一致検索
+  if (taskId) {
+    for (let name of candidateNames) {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) continue;
 
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) continue;
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) continue;
 
-    const ids = sheet.getRange(2, CONFIG.COL_ID, lastRow - 1, 1).getValues();
-    for (let i = 0; i < ids.length; i++) {
-      if (String(ids[i][0]) === String(taskId)) {
-        return { sheet: sheet, row: i + 2 };
+      const ids = sheet.getRange(2, CONFIG.COL_ID, lastRow - 1, 1).getValues();
+      for (let i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === String(taskId).trim()) {
+          return { sheet: sheet, row: i + 2 };
+        }
       }
     }
   }
+
+  // 2. taskId で見つからなかった場合、タスク名（および期日）でフォールバック検索（A列空欄行等の救済）
+  if (fallbackTaskName) {
+    const targetName = String(fallbackTaskName).trim();
+    for (let name of candidateNames) {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) continue;
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) continue;
+
+      const tasks = sheet.getRange(2, CONFIG.COL_TASK, lastRow - 1, 1).getValues();
+      for (let i = 0; i < tasks.length; i++) {
+        if (String(tasks[i][0]).trim() === targetName) {
+          const row = i + 2;
+          // ID列が空なら自動的にIDを採番して書き込む
+          const currentId = sheet.getRange(row, CONFIG.COL_ID).getValue();
+          if (!currentId) {
+            sheet.getRange(row, CONFIG.COL_ID).setValue(taskId || Utilities.getUuid().split('-')[0]);
+          }
+          return { sheet: sheet, row: row };
+        }
+      }
+    }
+  }
+
   return null;
 }
 
@@ -854,7 +901,7 @@ function findTaskLocationById(ss, taskId) {
  */
 function updateTaskFromApp(taskData) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const location = findTaskLocationById(ss, taskData.id);
+  const location = findTaskLocationById(ss, taskData.id, taskData.task, taskData.date);
   
   if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskData.id);
   
@@ -864,8 +911,8 @@ function updateTaskFromApp(taskData) {
   const expectedSheetName = isBizType ? CONFIG.BIZ_SHEET_NAME : CONFIG.PRIVATE_SHEET_NAME;
 
   // もしタスクの種類（Private/Biz）が変更されて別シートへ移動が必要な場合
-  if (sheet.getName() !== expectedSheetName && (sheet.getName() === CONFIG.PRIVATE_SHEET_NAME || sheet.getName() === CONFIG.BIZ_SHEET_NAME)) {
-    // 既存シートから削除し、新しいシートへ追加
+  if (sheet.getName() !== expectedSheetName && (sheet.getName() === CONFIG.PRIVATE_SHEET_NAME || sheet.getName() === CONFIG.BIZ_SHEET_NAME || sheet.getName() === CONFIG.OLD_SHEET_NAME)) {
+    // 既存シートから削除し、新しいシートへ追加（IDは保持）
     sheet.deleteRow(row);
     addNewTaskFromApp(taskData);
     return getInitialData();
@@ -877,6 +924,10 @@ function updateTaskFromApp(taskData) {
   
   sheet.getRange(row, CONFIG.COL_REPEAT).setValue(taskData.repeat || "None");
   sheet.getRange(row, CONFIG.COL_TYPE).setValue(newType);
+  
+  // ARRAYFORMULA数式との衝突防止のため、E列(プロジェクト名)のセルをクリア
+  sheet.getRange(row, CONFIG.COL_PROJECT_NAME).clearContent();
+  
   sheet.getRange(row, CONFIG.COL_PROJECT).setValue(taskData.projectId || "");
   sheet.getRange(row, CONFIG.COL_TASK).setValue(taskData.task || "");
   sheet.getRange(row, CONFIG.COL_DATE_E).setValue(dateVal);
