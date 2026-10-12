@@ -1529,7 +1529,7 @@
       return 5;
     }
 
-    // タスクの並び順比較関数（時間が最優先、時間未入力の場合はコンテキスト優先）
+    // 同一期日内での並び順比較関数（時間が最優先、時間未入力の場合はコンテキスト優先）
     function compareTasksByTimeAndPriority(a, b) {
       const aTime = (a.startTime || '').trim();
       const bTime = (b.startTime || '').trim();
@@ -1550,12 +1550,20 @@
       const rankDiff = getPriorityRank(a) - getPriorityRank(b);
       if (rankDiff !== 0) return rankDiff;
 
-      // 4. コンテキストも同一で、日付が異なるタスク同士（例: 「それ以降」）の場合は期日順
-      if (a.date && b.date && a.date !== b.date) {
-        return a.date.localeCompare(b.date);
-      }
-
       return 0;
+    }
+
+    // 複数期日が含まれるリスト用の総合ソート（期日が早い順 ＞ 同一期日内は時間順 ＞ 優先度順）
+    function compareTasksByDateAndTime(a, b) {
+      // 期日なし同士、または同一期日の場合は時間・優先度順
+      if (!a.date && !b.date) return compareTasksByTimeAndPriority(a, b);
+      if (!a.date) return 1;  // 期日なしは末尾へ
+      if (!b.date) return -1;
+      
+      const dateDiff = a.date.localeCompare(b.date);
+      if (dateDiff !== 0) return dateDiff; // 期日が早い順（昇順）
+      
+      return compareTasksByTimeAndPriority(a, b);
     }
 
     // 優先度プルダウンの動的生成
@@ -1765,8 +1773,8 @@
       Object.keys(groups).forEach(key => {
         const group = groups[key];
         if (group.list.length > 0) {
-          // グループ内を「時間優先、時間未入力の場合はコンテキスト優先」にソート
-          group.list.sort(compareTasksByTimeAndPriority);
+          // グループ内を「期日順 ＞ 同一期日内は時間優先・コンテキスト優先」にソート
+          group.list.sort(compareTasksByDateAndTime);
 
           // グループヘッダー
           const header = document.createElement('div');
@@ -1860,14 +1868,7 @@
       const projTasks = filtered.filter(t => t.projectId === projectId);
 
       // 期日順にソート（期日がないタスクは最後に、同一期日内は時間優先・コンテキスト優先）
-      projTasks.sort((a, b) => {
-        if (!a.date && !b.date) return compareTasksByTimeAndPriority(a, b);
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        const dateDiff = a.date.localeCompare(b.date);
-        if (dateDiff !== 0) return dateDiff;
-        return compareTasksByTimeAndPriority(a, b);
-      });
+      projTasks.sort(compareTasksByDateAndTime);
 
       // セクションヘッダー
       const header = document.createElement('div');
