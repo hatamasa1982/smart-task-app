@@ -587,19 +587,61 @@ function sortAllSheets() {
 }
 
 /**
- * Webアプリのエントリポイント（HTML配信 & Web API）
+ * 外部Webアプリ（GitHub Pages等）からのAPI処理共通ディスパッチャー
+ */
+function handleApiAction(action, payload) {
+  payload = payload || {};
+  let result;
+
+  if (action === 'getInitialData') {
+    result = getInitialData();
+  } else if (action === 'saveTask') {
+    const data = payload.taskData;
+    const isTempId = data && data.id && String(data.id).startsWith('tmp_');
+    if (data && data.id && !isTempId) {
+      result = updateTaskFromApp(data);
+    } else {
+      result = addNewTaskFromApp(data);
+    }
+  } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
+    result = completeTaskFromApp(payload.taskId);
+  } else if (action === 'deleteTask') {
+    result = deleteTaskFromApp(payload.taskId);
+  } else if (action === 'saveProject') {
+    result = addNewProjectFromApp(payload.projectData);
+  } else if (action === 'saveContext') {
+    result = saveContextFromApp(payload.contextData);
+  } else if (action === 'deleteContext') {
+    result = deleteContextFromApp(payload.contextId);
+  } else if (action === 'updateSortOrder') {
+    result = updateSortOrderFromApp(payload.idList);
+  } else {
+    throw new Error('未定義のアクションです: ' + action);
+  }
+
+  return result;
+}
+
+/**
+ * Webアプリのエントリポイント（HTML配信 & Web API GETハンドラー）
  */
 function doGet(e) {
-  // 1. 外部Webアプリ（GitHub Pages等）からのAPIリクエスト処理
+  // 1. 外部Webアプリ（GitHub Pages等）からのAPIリクエスト処理 (GET)
   if (e && e.parameter && e.parameter.action) {
     try {
       const action = e.parameter.action;
-      let result;
-      if (action === 'getInitialData') {
-        result = getInitialData();
+      let payload = {};
+      if (e.parameter.payload) {
+        try {
+          payload = JSON.parse(e.parameter.payload);
+        } catch (jsonErr) {
+          payload = {};
+        }
       } else {
-        result = { status: 'ok', message: 'Smart Task Web API is active.' };
+        payload = { ...e.parameter };
       }
+
+      const result = handleApiAction(action, payload);
       return ContentService.createTextOutput(JSON.stringify({ success: true, data: result }))
         .setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
@@ -626,33 +668,7 @@ function doPost(e) {
 
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
-    let result;
-
-    if (action === 'getInitialData') {
-      result = getInitialData();
-    } else if (action === 'saveTask') {
-      const data = payload.taskData;
-      const isTempId = data && data.id && String(data.id).startsWith('tmp_');
-      if (data && data.id && !isTempId) {
-        result = updateTaskFromApp(data);
-      } else {
-        result = addNewTaskFromApp(data);
-      }
-    } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
-      result = completeTaskFromApp(payload.taskId);
-    } else if (action === 'deleteTask') {
-      result = deleteTaskFromApp(payload.taskId);
-    } else if (action === 'saveProject') {
-      result = addNewProjectFromApp(payload.projectData);
-    } else if (action === 'saveContext') {
-      result = saveContextFromApp(payload.contextData);
-    } else if (action === 'deleteContext') {
-      result = deleteContextFromApp(payload.contextId);
-    } else if (action === 'updateSortOrder') {
-      result = updateSortOrderFromApp(payload.idList);
-    } else {
-      throw new Error('未定義のアクションです: ' + action);
-    }
+    const result = handleApiAction(action, payload);
 
     return ContentService.createTextOutput(JSON.stringify({ success: true, data: result }))
       .setMimeType(ContentService.MimeType.JSON);

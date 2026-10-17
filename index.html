@@ -1428,14 +1428,20 @@
       }
 
       if (gasApiUrl) {
-        if (action === 'getInitialData') {
-          const sep = gasApiUrl.includes('?') ? '&' : '?';
-          const res = await fetch(`${gasApiUrl}${sep}action=getInitialData`);
+        // GAS Web App の POST は 302 リダイレクト時に CORS/ブラウザ制約で Failed to fetch が発生しやすいため、
+        // GET リクエスト（クエリパラメータ）を第一優先で利用して安全に通信します。
+        const payloadStr = JSON.stringify(payload);
+        const sep = gasApiUrl.includes('?') ? '&' : '?';
+        const getUrl = `${gasApiUrl}${sep}action=${encodeURIComponent(action)}&payload=${encodeURIComponent(payloadStr)}`;
+
+        if (getUrl.length < 2000) {
+          const res = await fetch(getUrl, { method: 'GET' });
           const json = await res.json();
           if (json && json.success) return json.data;
-          throw new Error((json && json.error) || 'データ取得に失敗しました');
+          throw new Error((json && json.error) || 'APIリクエストに失敗しました');
         }
 
+        // ペイロードが 2000 文字を超える場合のみ POST を試行
         const res = await fetch(gasApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
