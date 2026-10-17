@@ -3219,10 +3219,22 @@
     }
 
     async function testConnection() {
+      const input = document.getElementById('gas-api-url-input');
+      const testUrl = input ? input.value.trim() : gasApiUrl;
+      if (!testUrl) {
+        alert('URLを入力してください');
+        return;
+      }
       showToast('接続テスト中...');
       try {
-        const data = await callBackendApi('getInitialData');
-        if (data) showToast('接続成功！スプレッドシートと正常に通信できました');
+        const sep = testUrl.includes('?') ? '&' : '?';
+        const res = await fetch(`${testUrl}${sep}action=getInitialData`);
+        const json = await res.json();
+        if (json && json.success) {
+          alert('接続成功！スプレッドシートと正常に通信できました ✅\n「保存する」ボタンを押して設定を確定してください。');
+        } else {
+          alert('接続エラー: ' + ((json && json.error) || 'レスポンスが不正です'));
+        }
       } catch (e) {
         alert('接続に失敗しました: ' + e.message);
       }
