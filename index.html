@@ -922,6 +922,99 @@
       outline: 1px dashed #93c5fd;
     }
 
+    /* 行アクションボタン */
+    .row-actions-group {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      opacity: 0.6;
+      transition: opacity 0.15s ease;
+    }
+    .task-row:hover .row-actions-group {
+      opacity: 1;
+    }
+    .col-actions {
+      width: 70px !important;
+      text-align: center !important;
+    }
+
+    /* サイドバー行アクション */
+    .folder-item-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .folder-action-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 1px;
+      display: none;
+      border-radius: 3px;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .folder-item:hover .folder-action-btn {
+      display: inline-flex;
+    }
+    .folder-action-btn:hover {
+      color: #1e293b;
+      background: #e2e8f0;
+    }
+
+    /* カレンダーナビゲーション */
+    .cal-nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: #f1f5f9;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .cal-nav-btn {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      color: #334155;
+      font-weight: 600;
+    }
+    .cal-nav-btn:hover {
+      background: #e2e8f0;
+      color: #0284c7;
+    }
+
+    /* ソートプルダウン */
+    .sort-select-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+    .sort-select {
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+      font-family: inherit;
+    }
+    .sort-select option {
+      background: #1e293b;
+      color: #ffffff;
+    }
+
     /* レスポンシブ (モバイル対応) */
     @media (max-width: 768px) {
       .menu-toggle-btn {
@@ -1000,6 +1093,9 @@
       <button class="rail-btn active" id="rail-btn-folders" onclick="setRailMode('folders')" data-tooltip="Folders (プロジェクト)">
         <span class="material-symbols-outlined">folder</span>
       </button>
+      <button class="rail-btn" id="rail-btn-contexts" onclick="setRailMode('contexts')" data-tooltip="Contexts (コンテキスト)">
+        <span style="font-weight: bold; font-size: 17px; font-family: monospace;">@</span>
+      </button>
       <button class="rail-btn" id="rail-btn-calendar" onclick="setRailMode('calendar')" data-tooltip="Calendar (カレンダー)">
         <span class="material-symbols-outlined">calendar_month</span>
       </button>
@@ -1016,21 +1112,21 @@
       <div class="sidebar-header">
         <span id="sidebar-header-title">Folders</span>
         <div class="sidebar-header-actions">
-          <button class="sidebar-icon-btn" onclick="promptNewFolder()" title="新しいフォルダを追加">
-            <span class="material-symbols-outlined" style="font-size: 18px;">edit</span>
+          <button class="sidebar-icon-btn" onclick="handleSidebarAction()" title="新規追加">
+            <span class="material-symbols-outlined" style="font-size: 18px;" id="sidebar-header-action-icon">add</span>
           </button>
         </div>
       </div>
 
-      <!-- フォルダ一覧 -->
+      <!-- フォルダ/コンテキスト一覧 -->
       <ul class="folder-list" id="folder-list">
         <!-- JSで動的生成 -->
       </ul>
 
-      <!-- + Add a folder ボタン -->
-      <button class="sidebar-add-folder-btn" onclick="promptNewFolder()">
+      <!-- + Add ボタン（モードに応じて変化） -->
+      <button class="sidebar-add-folder-btn" id="sidebar-action-btn" onclick="handleSidebarAction()">
         <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
-        <span>Add a folder</span>
+        <span id="sidebar-action-text">Add a folder</span>
       </button>
     </aside>
 
@@ -1047,10 +1143,16 @@
           <strong id="breadcrumb-current-folder">All Tasks</strong>
         </div>
         <div class="view-actions">
-          <span class="view-action-link" onclick="toggleSortOrder()">
-            <span class="material-symbols-outlined" style="font-size: 16px;">sort</span>
-            <span id="sort-label">SORT: Due Date</span>
-          </span>
+          <div class="sort-select-wrapper">
+            <span class="material-symbols-outlined" style="font-size: 15px; color: #bae6fd;">sort</span>
+            <select class="sort-select" id="sort-select" onchange="changeSortOrder(this.value)">
+              <option value="dueDate">SORT: Due Date (期日順)</option>
+              <option value="priority">SORT: Priority (優先度順)</option>
+              <option value="folder">SORT: Folder (プロジェクト順)</option>
+              <option value="context">SORT: Context (コンテキスト順)</option>
+              <option value="title">SORT: Task (名前順)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1237,12 +1339,15 @@
       projects: [],
       doneTasks: [],
       contexts: [],
-      selectedFolder: 'All', // 'All', 'No Folder', または プロジェクト名
-      selectedDate: null,    // カレンダー選択日付 (YYYY-MM-DD)
-      railMode: 'folders',   // 'folders', 'calendar'
-      showCompleted: false,  // 完了タスク表示切替
+      selectedFolder: 'All',   // 'All', 'No Folder', または プロジェクト名
+      selectedContext: 'All',  // 'All', 'No Context', または コンテキスト名
+      selectedDate: null,      // カレンダー選択日付 (YYYY-MM-DD)
+      railMode: 'folders',     // 'folders', 'contexts', 'calendar'
+      showCompleted: false,    // 完了タスク表示切替
       searchQuery: '',
-      sortField: 'dueDate'   // 'dueDate', 'priority'
+      sortField: 'dueDate',    // 'dueDate', 'priority', 'folder', 'context', 'title'
+      calYear: new Date().getFullYear(),
+      calMonth: new Date().getMonth()
     };
 
     // 初期化
@@ -1268,6 +1373,8 @@
             else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId);
             else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId);
             else if (action === 'saveProject') api.addNewProjectFromApp(payload.projectData);
+            else if (action === 'saveContext') api.saveContextFromApp(payload.contextData);
+            else if (action === 'deleteContext') api.deleteContextFromApp(payload.contextId);
             else reject(new Error('未対応のアクションです: ' + action));
           });
         }
@@ -1349,14 +1456,28 @@
     // レンダリング全般
     // ----------------------------------
     function renderAll() {
-      renderSidebarFolders();
+      if (state.railMode === 'contexts') {
+        renderSidebarContexts();
+      } else if (state.railMode === 'calendar') {
+        renderMiniCalendarSidebar();
+      } else {
+        renderSidebarFolders();
+      }
       renderBreadcrumb();
       renderTaskTable();
       populateProjectSelects();
+      populateContextSelect();
     }
 
     // サブサイドバーのフォルダ一覧
     function renderSidebarFolders() {
+      const titleEl = document.getElementById('sidebar-header-title');
+      if (titleEl) titleEl.innerText = 'Folders';
+      const actionText = document.getElementById('sidebar-action-text');
+      if (actionText) actionText.innerText = 'Add a folder';
+      const actionBtn = document.getElementById('sidebar-action-btn');
+      if (actionBtn) actionBtn.style.display = 'flex';
+
       const list = document.getElementById('folder-list');
       if (!list) return;
       list.innerHTML = '';
@@ -1394,13 +1515,107 @@
           <span class="material-symbols-outlined icon">${iconName}</span>
           <span title="${label}">${label}</span>
         </div>
-        <span class="folder-badge">${count}</span>
+        <div class="folder-item-right">
+          <span class="folder-badge">${count}</span>
+        </div>
       `;
       return li;
     }
 
     function selectFolder(folderKey) {
       state.selectedFolder = folderKey;
+      state.selectedContext = 'All';
+      state.selectedDate = null;
+      state.showCompleted = false;
+      renderAll();
+    }
+
+    // サブサイドバーのコンテキスト一覧 (@)
+    function renderSidebarContexts() {
+      const titleEl = document.getElementById('sidebar-header-title');
+      if (titleEl) titleEl.innerText = 'Contexts';
+      const actionText = document.getElementById('sidebar-action-text');
+      if (actionText) actionText.innerText = 'Add a context';
+      const actionBtn = document.getElementById('sidebar-action-btn');
+      if (actionBtn) actionBtn.style.display = 'flex';
+
+      const list = document.getElementById('folder-list');
+      if (!list) return;
+      list.innerHTML = '';
+
+      // 1. All Contexts
+      const allCount = state.tasks.filter(t => !t.status).length;
+      list.appendChild(createContextItem('All', 'All Contexts', allCount, null));
+
+      // 2. スプレッドシートの contexts とタスク内のコンテキストを統合
+      const contextMap = new Map();
+
+      // スプレッドシート由来のコンテキスト
+      if (state.contexts && Array.isArray(state.contexts)) {
+        state.contexts.forEach(c => {
+          const cName = (c.name || c.id || '').trim();
+          if (cName) contextMap.set(cName, { id: c.id || cName, name: cName, isDb: true });
+        });
+      }
+
+      // デフォルト候補（まだなければ追加）
+      const defaults = ['000=inbox', '024=後回し可', '最優先', '優先', '隙間時間'];
+      defaults.forEach(d => {
+        if (!contextMap.has(d)) {
+          contextMap.set(d, { id: null, name: d, isDb: false });
+        }
+      });
+
+      // タスク内で使われているコンテキストも拾い上げる
+      state.tasks.filter(t => !t.status).forEach(t => {
+        const desc = (t.description || '').trim();
+        if (desc && !contextMap.has(desc)) {
+          contextMap.set(desc, { id: null, name: desc, isDb: false });
+        }
+      });
+
+      // 各コンテキストの未完了タスク数を集計して行を描画
+      contextMap.forEach(item => {
+        const count = state.tasks.filter(t => !t.status && (t.description || '').includes(item.name)).length;
+        const displayLabel = item.name.replace(/^@\s*/, '');
+        list.appendChild(createContextItem(item.name, displayLabel, count, item.id));
+      });
+
+      // No Context
+      const noCtxCount = state.tasks.filter(t => !t.status && (!t.description || !t.description.trim())).length;
+      list.appendChild(createContextItem('No Context', 'No Context', noCtxCount, null));
+    }
+
+    function createContextItem(ctxKey, label, count, contextId) {
+      const li = document.createElement('li');
+      li.className = 'folder-item' + (state.selectedContext === ctxKey ? ' active' : '');
+      li.onclick = () => selectContext(ctxKey);
+
+      const hasActions = (ctxKey !== 'All' && ctxKey !== 'No Context');
+
+      li.innerHTML = `
+        <div class="folder-item-left">
+          <span style="font-weight: bold; font-family: monospace; color: #0284c7; font-size: 14px;">@</span>
+          <span title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+        </div>
+        <div class="folder-item-right">
+          <span class="folder-badge">${count}</span>
+          ${hasActions ? `
+            <button class="folder-action-btn" onclick="promptEditContext('${contextId || ''}', '${escapeHtml(ctxKey)}', event)" title="コンテキスト名を編集">
+              <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
+            </button>
+            <button class="folder-action-btn" onclick="confirmDeleteContext('${contextId || ''}', '${escapeHtml(ctxKey)}', event)" title="削除" style="color: #ef4444;">
+              <span class="material-symbols-outlined" style="font-size: 14px;">delete</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
+      return li;
+    }
+
+    function selectContext(ctxKey) {
+      state.selectedContext = ctxKey;
+      state.selectedFolder = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
       renderAll();
@@ -1409,14 +1624,18 @@
     function renderBreadcrumb() {
       const currentFolderEl = document.getElementById('breadcrumb-current-folder');
       const modeEl = document.getElementById('breadcrumb-mode');
-      if (modeEl) modeEl.innerText = state.railMode === 'calendar' ? 'Calendar' : 'Folders';
-      if (currentFolderEl) {
-        if (state.showCompleted) {
-          currentFolderEl.innerText = 'Completed Tasks';
-        } else if (state.selectedDate) {
-          currentFolderEl.innerText = `Date: ${state.selectedDate}`;
-        } else {
-          currentFolderEl.innerText = state.selectedFolder;
+      
+      if (state.railMode === 'contexts') {
+        if (modeEl) modeEl.innerText = 'Contexts';
+        if (currentFolderEl) currentFolderEl.innerText = state.selectedContext === 'All' ? 'All Contexts' : `@ ${state.selectedContext}`;
+      } else if (state.railMode === 'calendar') {
+        if (modeEl) modeEl.innerText = 'Calendar';
+        if (currentFolderEl) currentFolderEl.innerText = state.selectedDate ? `Date: ${state.selectedDate}` : 'All Dates';
+      } else {
+        if (modeEl) modeEl.innerText = 'Folders';
+        if (currentFolderEl) {
+          if (state.showCompleted) currentFolderEl.innerText = 'Completed Tasks';
+          else currentFolderEl.innerText = state.selectedFolder;
         }
       }
     }
@@ -1436,6 +1655,15 @@
           taskList = taskList.filter(t => !t.projectName && !t.projectId);
         } else {
           taskList = taskList.filter(t => t.projectName === state.selectedFolder || t.projectId === state.selectedFolder);
+        }
+      }
+
+      // コンテキストによるフィルタ
+      if (state.selectedContext !== 'All') {
+        if (state.selectedContext === 'No Context') {
+          taskList = taskList.filter(t => !t.description || !t.description.trim());
+        } else {
+          taskList = taskList.filter(t => (t.description || '').includes(state.selectedContext));
         }
       }
 
@@ -1473,30 +1701,74 @@
         return;
       }
 
-      // 期日ベースのグループ分け（Due in the past, Today, Tomorrow, Upcoming, No Date）
-      const todayStr = getTodayString();
-      const groups = {
-        past: { label: 'Due in the past', list: [] },
-        today: { label: 'Today', list: [] },
-        tomorrow: { label: 'Tomorrow', list: [] },
-        upcoming: { label: 'Upcoming', list: [] },
-        nodate: { label: 'No Due Date', list: [] }
-      };
+      // グループ化ロジックの選択
+      const isContextMode = state.railMode === 'contexts' || state.sortField === 'context';
+      const isFolderMode = state.sortField === 'folder';
+      const isPriorityMode = state.sortField === 'priority';
+      const isTitleMode = state.sortField === 'title';
 
-      taskList.forEach(t => {
-        if (!t.date) {
-          groups.nodate.list.push(t);
-        } else if (t.date < todayStr) {
-          groups.past.list.push(t);
-        } else if (t.date === todayStr) {
-          groups.today.list.push(t);
-        } else {
-          // 明日判定
-          const tmrw = getOffsetDateString(1);
-          if (t.date === tmrw) groups.tomorrow.list.push(t);
-          else groups.upcoming.list.push(t);
-        }
-      });
+      const groups = {};
+
+      if (isContextMode) {
+        // コンテキスト別にグループ化（画像2スタイル！）
+        taskList.forEach(t => {
+          const cName = (t.description || '').trim() || 'No Context';
+          const grpKey = 'ctx_' + cName;
+          if (!groups[grpKey]) {
+            groups[grpKey] = { label: `@ ${cName}`, icon: 'label', list: [] };
+          }
+          groups[grpKey].list.push(t);
+        });
+      } else if (isFolderMode) {
+        // フォルダ別にグループ化
+        taskList.forEach(t => {
+          const fName = t.projectName || 'No Folder';
+          const grpKey = 'folder_' + fName;
+          if (!groups[grpKey]) {
+            groups[grpKey] = { label: `Folder: ${fName}`, icon: 'folder', list: [] };
+          }
+          groups[grpKey].list.push(t);
+        });
+      } else if (isPriorityMode) {
+        // 優先度別にグループ化
+        groups['pri_3'] = { label: '3 Top Priority (最優先)', icon: 'star', list: [] };
+        groups['pri_2'] = { label: '2 High Priority (優先)', icon: 'flag', list: [] };
+        groups['pri_1'] = { label: '1 Medium Priority (隙間時間)', icon: 'schedule', list: [] };
+        groups['pri_0'] = { label: '0 Low Priority (通常)', icon: 'check_circle', list: [] };
+
+        taskList.forEach(t => {
+          const desc = t.description || '';
+          if (desc.includes('最優先')) groups['pri_3'].list.push(t);
+          else if (desc.includes('優先')) groups['pri_2'].list.push(t);
+          else if (desc.includes('隙間')) groups['pri_1'].list.push(t);
+          else groups['pri_0'].list.push(t);
+        });
+      } else if (isTitleMode) {
+        // 名前順（全体）
+        groups['all'] = { label: 'All Tasks (Alphabetical)', icon: 'sort_by_alpha', list: [...taskList].sort((a,b)=>(a.task||'').localeCompare(b.task||'')) };
+      } else {
+        // デフォルト: 期日別グループ化 (Due in the past, Today, Tomorrow, Upcoming, No Date)
+        const todayStr = getTodayString();
+        groups.past = { label: 'Due in the past', icon: 'warning', list: [] };
+        groups.today = { label: 'Today', icon: 'today', list: [] };
+        groups.tomorrow = { label: 'Tomorrow', icon: 'event', list: [] };
+        groups.upcoming = { label: 'Upcoming', icon: 'calendar_month', list: [] };
+        groups.nodate = { label: 'No Due Date', icon: 'help_outline', list: [] };
+
+        taskList.forEach(t => {
+          if (!t.date) {
+            groups.nodate.list.push(t);
+          } else if (t.date < todayStr) {
+            groups.past.list.push(t);
+          } else if (t.date === todayStr) {
+            groups.today.list.push(t);
+          } else {
+            const tmrw = getOffsetDateString(1);
+            if (t.date === tmrw) groups.tomorrow.list.push(t);
+            else groups.upcoming.list.push(t);
+          }
+        });
+      }
 
       // 各グループの描画
       Object.keys(groups).forEach(gk => {
@@ -1508,15 +1780,15 @@
           groupTr.innerHTML = `
             <td colspan="10">
               <div class="group-header-content">
-                <span class="material-symbols-outlined" style="font-size: 15px;">calendar_today</span>
+                <span class="material-symbols-outlined" style="font-size: 15px;">${grp.icon || 'calendar_today'}</span>
                 <span>${grp.label} (${grp.list.length})</span>
               </div>
             </td>
           `;
           tbody.appendChild(groupTr);
 
-          // タスク行の追加
-          grp.list.sort(compareTasksByDateAndTime);
+          // タスク行の追加（ソート）
+          if (!isTitleMode) grp.list.sort(compareTasksByDateAndTime);
           grp.list.forEach(task => {
             tbody.appendChild(createTaskTableRow(task));
           });
@@ -1586,9 +1858,17 @@
           <span style="color: #94a3b8; font-size: 11px;">${task.repeat || 'None'}</span>
         </td>
         <td class="col-actions">
-          <button class="row-action-btn" onclick="openEditModal('${task.id}')" title="全項目をモーダルで編集">
-            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
-          </button>
+          <div class="row-actions-group">
+            <button class="row-action-btn" onclick="openEditModal('${task.id}')" title="モーダルで編集">
+              <span class="material-symbols-outlined" style="font-size: 15px;">edit</span>
+            </button>
+            <button class="row-action-btn" onclick="cloneTask('${task.id}')" title="複製（コピー）">
+              <span class="material-symbols-outlined" style="font-size: 15px;">content_copy</span>
+            </button>
+            <button class="row-action-btn" onclick="deleteTaskRow('${task.id}')" title="削除" style="color: #ef4444;">
+              <span class="material-symbols-outlined" style="font-size: 15px;">delete</span>
+            </button>
+          </div>
         </td>
       `;
       return tr;
@@ -2035,6 +2315,146 @@
       if (currentVal) select.value = currentVal;
     }
 
+    // コンテキストプルダウン生成（タスク編集モーダル用）
+    function populateContextSelect() {
+      const select = document.getElementById('task-context-select');
+      if (!select) return;
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">(なし)</option>';
+
+      const added = new Set();
+      // デフォルト優先度
+      const baseDefaults = [
+        { val: '最優先', label: '🔥 最優先' },
+        { val: '優先', label: '⭐ 優先' },
+        { val: '隙間時間', label: '☕ 隙間時間' },
+        { val: '000=inbox', label: '000=inbox' },
+        { val: '024=後回し可', label: '024=後回し可' }
+      ];
+      baseDefaults.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.val;
+        opt.innerText = b.label;
+        select.appendChild(opt);
+        added.add(b.val);
+      });
+
+      // スプレッドシート由来のコンテキスト
+      if (state.contexts && Array.isArray(state.contexts)) {
+        state.contexts.forEach(c => {
+          const cName = (c.name || c.id || '').trim();
+          if (cName && !added.has(cName)) {
+            const opt = document.createElement('option');
+            opt.value = cName;
+            opt.innerText = `@ ${cName}`;
+            select.appendChild(opt);
+            added.add(cName);
+          }
+        });
+      }
+
+      if (currentVal) select.value = currentVal;
+    }
+
+    // サイドバーの新規追加アクション（フォルダまたはコンテキスト）
+    function handleSidebarAction() {
+      if (state.railMode === 'contexts') {
+        promptNewContext();
+      } else {
+        promptNewFolder();
+      }
+    }
+
+    // 新規コンテキスト追加ダイアログ
+    async function promptNewContext() {
+      const name = prompt('新しいコンテキスト名を入力してください（例: 030=外出, 連絡待ち）:');
+      if (!name || !name.trim()) return;
+
+      const trimmedName = name.trim();
+      const newCtx = {
+        id: 'c_' + Date.now(),
+        name: trimmedName
+      };
+
+      if (!state.contexts) state.contexts = [];
+      state.contexts.push(newCtx);
+      state.selectedContext = trimmedName;
+      renderAll();
+      showToast(`コンテキスト「@ ${trimmedName}」を作成しました`);
+
+      try {
+        setSyncStatus('保存中...', true);
+        const res = await callBackendApi('saveContext', { contextData: newCtx });
+        if (res && res.contexts) state.contexts = res.contexts;
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('コンテキスト作成エラー:', e);
+        showToast('コンテキストの保存に失敗しました');
+        setSyncStatus('エラー', false);
+      }
+    }
+
+    // コンテキスト編集ダイアログ
+    async function promptEditContext(contextId, currentName, e) {
+      if (e) e.stopPropagation();
+      const newName = prompt('コンテキスト名を編集してください:', currentName);
+      if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+      const trimmed = newName.trim();
+      // state.contexts の該当項目を更新
+      if (state.contexts) {
+        const found = state.contexts.find(c => (c.id && String(c.id) === String(contextId)) || c.name === currentName);
+        if (found) found.name = trimmed;
+      }
+
+      // タスク内の旧コンテキスト名も書き換え
+      state.tasks.forEach(t => {
+        if (t.description === currentName) t.description = trimmed;
+      });
+
+      if (state.selectedContext === currentName) {
+        state.selectedContext = trimmed;
+      }
+
+      renderAll();
+      showToast(`コンテキスト名を「@ ${trimmed}」に更新しました`);
+
+      try {
+        setSyncStatus('保存中...', true);
+        await callBackendApi('saveContext', { contextData: { id: contextId, name: trimmed } });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('コンテキスト更新エラー:', e);
+        showToast('更新の同期に失敗しました');
+      }
+    }
+
+    // コンテキスト削除
+    async function confirmDeleteContext(contextId, contextName, e) {
+      if (e) e.stopPropagation();
+      if (!confirm(`コンテキスト「@ ${contextName}」を削除しますか？\n（※既存タスクのコンテキストは削除されません）`)) return;
+
+      if (state.contexts) {
+        state.contexts = state.contexts.filter(c => (c.id && String(c.id) !== String(contextId)) && c.name !== contextName);
+      }
+      if (state.selectedContext === contextName) {
+        state.selectedContext = 'All';
+      }
+
+      renderAll();
+      showToast(`コンテキスト「@ ${contextName}」を削除しました`);
+
+      try {
+        setSyncStatus('削除中...', true);
+        await callBackendApi('deleteContext', { contextId: contextId });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('コンテキスト削除エラー:', e);
+        showToast('削除の同期に失敗しました');
+      }
+    }
+
+    // ナビゲーションレイル切り替え
     // ナビゲーションレイル切り替え
     function setRailMode(mode) {
       state.railMode = mode;
@@ -2044,14 +2464,36 @@
 
       if (mode === 'calendar') {
         renderMiniCalendarSidebar();
+      } else if (mode === 'contexts') {
+        renderSidebarContexts();
       } else {
-        document.getElementById('sidebar-header-title').innerText = 'Folders';
         renderSidebarFolders();
       }
       renderBreadcrumb();
+      renderTaskTable();
     }
 
-    // カレンダーサイドバーの描画
+    // カレンダー月移動
+    function navigateMonth(offset) {
+      state.calMonth += offset;
+      if (state.calMonth < 0) {
+        state.calMonth = 11;
+        state.calYear -= 1;
+      } else if (state.calMonth > 11) {
+        state.calMonth = 0;
+        state.calYear += 1;
+      }
+      renderMiniCalendarSidebar();
+    }
+
+    function navigateMonthToToday() {
+      const now = new Date();
+      state.calYear = now.getFullYear();
+      state.calMonth = now.getMonth();
+      renderMiniCalendarSidebar();
+    }
+
+    // カレンダーサイドバーの描画（月送り＆直近2ヶ月表示）
     function renderMiniCalendarSidebar() {
       const headerTitle = document.getElementById('sidebar-header-title');
       if (headerTitle) headerTitle.innerText = 'Calendar';
@@ -2059,33 +2501,71 @@
       const container = document.getElementById('folder-list');
       if (!container) return;
 
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth();
+      const y = state.calYear;
+      const m = state.calMonth;
+
+      // 翌月の年・月を計算
+      let nextY = y;
+      let nextM = m + 1;
+      if (nextM > 11) {
+        nextM = 0;
+        nextY += 1;
+      }
 
       let calHtml = `
-        <div style="padding: 12px; background: #fff; margin: 8px; border-radius: 8px; border: 1px solid #e2e8f0;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; font-size: 13px;">
-            <span>${currentYear}年 ${currentMonth + 1}月</span>
+        <div style="padding: 10px;">
+          <!-- 月移動コントロール -->
+          <div class="cal-nav-bar">
+            <button class="cal-nav-btn" onclick="navigateMonth(-1)" title="前月へ">◀ 前月</button>
+            <button class="cal-nav-btn" onclick="navigateMonthToToday()" title="今月へ">今日</button>
+            <button class="cal-nav-btn" onclick="navigateMonth(1)" title="翌月へ">翌月 ▶</button>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 4px; font-size: 11px;">
-            <span style="color: #ef4444;">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color: #3b82f6;">土</span>
+
+          <!-- 第1月 -->
+          ${generateSingleMonthHtml(y, m)}
+
+          <!-- 第2月（翌月） -->
+          <div style="margin-top: 12px;">
+            ${generateSingleMonthHtml(nextY, nextM)}
+          </div>
+
+          ${state.selectedDate ? `
+            <button class="sidebar-add-folder-btn" onclick="clearDateFilter()" style="margin-top: 12px; justify-content: center; width: calc(100% - 28px);">
+              <span class="material-symbols-outlined" style="font-size: 16px;">filter_alt_off</span>
+              <span>日付絞り込みを解除</span>
+            </button>
+          ` : ''}
+        </div>
+      `;
+      container.innerHTML = calHtml;
+    }
+
+    // 単一月のカレンダーHTML生成
+    function generateSingleMonthHtml(year, month) {
+      const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+      let html = `
+        <div style="padding: 10px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; font-size: 12.5px; color: #1e293b;">
+            <span>${year}年 ${monthNames[month]}</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 3px; font-size: 10.5px;">
+            <span style="color: #ef4444; font-weight: bold;">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color: #3b82f6; font-weight: bold;">土</span>
       `;
 
-      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
 
       for (let i = 0; i < firstDay; i++) {
-        calHtml += `<span></span>`;
+        html += `<span></span>`;
       }
 
       for (let d = 1; d <= daysInMonth; d++) {
-        const dStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const taskCount = state.tasks.filter(t => !t.status && t.date === dStr).length;
         const isToday = dStr === getTodayString();
         const isSelected = dStr === state.selectedDate;
 
-        calHtml += `
+        html += `
           <div onclick="selectCalendarDate('${dStr}')" style="cursor: pointer; padding: 4px 0; border-radius: 4px; position: relative; ${isSelected ? 'background: #0284c7; color: #fff; font-weight: bold;' : (isToday ? 'background: #e0f2fe; color: #0369a1; font-weight: bold;' : '')}">
             ${d}
             ${taskCount > 0 ? `<div style="width: 4px; height: 4px; background: ${isSelected ? '#fff' : '#f59e0b'}; border-radius: 50%; margin: 2px auto 0;"></div>` : ''}
@@ -2093,16 +2573,24 @@
         `;
       }
 
-      calHtml += `
+      html += `
           </div>
         </div>
       `;
-      container.innerHTML = calHtml;
+      return html;
     }
 
     function selectCalendarDate(dateStr) {
       state.selectedDate = dateStr;
       state.selectedFolder = 'All';
+      state.selectedContext = 'All';
+      renderBreadcrumb();
+      renderTaskTable();
+      renderMiniCalendarSidebar();
+    }
+
+    function clearDateFilter() {
+      state.selectedDate = null;
       renderBreadcrumb();
       renderTaskTable();
       renderMiniCalendarSidebar();
@@ -2121,6 +2609,7 @@
 
     function resetFilters() {
       state.selectedFolder = 'All';
+      state.selectedContext = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
       state.searchQuery = '';
@@ -2133,10 +2622,58 @@
       renderTaskTable();
     }
 
-    function toggleSortOrder() {
-      state.sortField = state.sortField === 'dueDate' ? 'priority' : 'dueDate';
-      document.getElementById('sort-label').innerText = `SORT: ${state.sortField === 'dueDate' ? 'Due Date' : 'Priority'}`;
+    function changeSortOrder(val) {
+      state.sortField = val;
       renderTaskTable();
+    }
+
+    // ----------------------------------
+    // タスク複製 & 削除
+    // ----------------------------------
+    async function cloneTask(taskId) {
+      const original = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      if (!original) return;
+
+      const cloned = JSON.parse(JSON.stringify(original));
+      cloned.id = 'tmp_' + Date.now();
+      cloned.task = cloned.task + ' (コピー)';
+      cloned.status = false;
+
+      state.tasks.unshift(cloned);
+      renderAll();
+      showToast('タスクを複製しました 📋');
+
+      try {
+        setSyncStatus('保存中...', true);
+        const res = await callBackendApi('saveTask', { taskData: cloned });
+        if (res && res.id) cloned.id = res.id;
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('複製エラー:', e);
+        showToast('複製の保存に失敗しました');
+      }
+    }
+
+    async function deleteTaskRow(taskId) {
+      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      if (!confirm(`タスク「${task.task}」を削除しますか？`)) return;
+
+      // 楽観的削除
+      state.tasks = state.tasks.filter(t => t.id !== taskId);
+      state.doneTasks = state.doneTasks.filter(t => t.id !== taskId);
+      renderAll();
+      showToast('タスクを削除しました 🗑️');
+
+      try {
+        setSyncStatus('削除中...', true);
+        await callBackendApi('deleteTask', { taskId });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('削除エラー:', e);
+        showToast('削除の同期に失敗しました');
+      }
     }
 
     // ----------------------------------

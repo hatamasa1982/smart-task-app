@@ -643,6 +643,10 @@ function doPost(e) {
       result = deleteTaskFromApp(payload.taskId);
     } else if (action === 'saveProject') {
       result = addNewProjectFromApp(payload.projectData);
+    } else if (action === 'saveContext') {
+      result = saveContextFromApp(payload.contextData);
+    } else if (action === 'deleteContext') {
+      result = deleteContextFromApp(payload.contextId);
     } else if (action === 'updateSortOrder') {
       result = updateSortOrderFromApp(payload.idList);
     } else {
@@ -1001,6 +1005,86 @@ function deleteTaskFromApp(taskId) {
   SpreadsheetApp.flush();
   sortAll(sheet);
   
+  return getInitialData();
+}
+
+/**
+ * コンテキストシートを取得（存在しなければ自動作成・ヘッダー初期化）
+ */
+function getOrCreateContextSheet(ss) {
+  let sheet = ss.getSheetByName(CONFIG.CONTEXT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.CONTEXT_SHEET_NAME);
+    sheet.getRange(1, 1).setValue("ID");
+    sheet.getRange(1, 2).setValue("コンテキスト名");
+    sheet.getRange(1, 1, 1, 2).setFontWeight("bold").setBackground("#e2e8f0");
+  }
+  return sheet;
+}
+
+/**
+ * アプリからコンテキストを追加または更新
+ */
+function saveContextFromApp(contextData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrCreateContextSheet(ss);
+  
+  const lastRow = sheet.getLastRow();
+  const cId = contextData.id ? String(contextData.id) : "";
+  const cName = contextData.name ? String(contextData.name).trim() : "";
+  
+  if (!cName) throw new Error("コンテキスト名を入力してください");
+
+  // 既存IDの行を検索して更新
+  let foundRow = -1;
+  if (cId && lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === cId) {
+        foundRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (foundRow > 0) {
+    sheet.getRange(foundRow, 2).setValue(cName);
+  } else {
+    // 新規採番
+    let newId = 1;
+    if (lastRow >= 2) {
+      const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(r => Number(r[0])).filter(v => !isNaN(v));
+      if (ids.length > 0) newId = Math.max(...ids) + 1;
+    }
+    const targetRow = lastRow + 1;
+    sheet.getRange(targetRow, 1).setValue(newId);
+    sheet.getRange(targetRow, 2).setValue(cName);
+  }
+
+  SpreadsheetApp.flush();
+  return getInitialData();
+}
+
+/**
+ * アプリからコンテキストを削除
+ */
+function deleteContextFromApp(contextId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.CONTEXT_SHEET_NAME);
+  if (!sheet) return getInitialData();
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return getInitialData();
+
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(contextId).trim()) {
+      sheet.deleteRow(i + 2);
+      break;
+    }
+  }
+
+  SpreadsheetApp.flush();
   return getInitialData();
 }
 
