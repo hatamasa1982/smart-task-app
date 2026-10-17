@@ -2269,7 +2269,11 @@
         }
       };
 
-      input.onchange = () => finish(true);
+      // Enterキーで確定、Escapeでキャンセル、枠外クリック（blur）で確定
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') finish(true);
+        else if (ev.key === 'Escape') finish(false);
+      };
       input.onblur = () => finish(true);
     }
 
@@ -2298,7 +2302,11 @@
         }
       };
 
-      input.onchange = () => finish(true);
+      // Enterキーで確定、Escapeでキャンセル、枠外クリック（blur）で確定
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') finish(true);
+        else if (ev.key === 'Escape') finish(false);
+      };
       input.onblur = () => finish(true);
     }
 
