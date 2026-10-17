@@ -1193,8 +1193,7 @@
           <div class="sort-select-wrapper">
             <span class="material-symbols-outlined" style="font-size: 15px; color: #bae6fd;">sort</span>
             <select class="sort-select" id="sort-select" onchange="changeSortOrder(this.value)">
-              <option value="dueDate">SORT: Due Date (期日順)</option>
-              <option value="priority">SORT: Priority (優先度順)</option>
+              <option value="dueDate">SORT: Due Date (期日・時間順)</option>
               <option value="folder">SORT: Folder (プロジェクト順)</option>
               <option value="context">SORT: Context (コンテキスト順)</option>
               <option value="title">SORT: Task (名前順)</option>
@@ -3034,13 +3033,38 @@
       return dateStr;
     }
 
+    // 期日および開始時間によるタスクの並び替え（第1優先: 期日、第2優先: 開始時間、未設定は末尾）
     function compareTasksByDateAndTime(a, b) {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      const diff = a.date.localeCompare(b.date);
-      if (diff !== 0) return diff;
-      return (a.startTime || '').localeCompare(b.startTime || '');
+      // 1. 期日（日付）の比較（早い順、未設定は末尾）
+      if (!a.date && b.date) return 1;
+      if (a.date && !b.date) return -1;
+      if (a.date && b.date) {
+        const dDiff = a.date.localeCompare(b.date);
+        if (dDiff !== 0) return dDiff;
+      }
+
+      // 2. 開始時間の比較（早い順、未設定は末尾）
+      const aStart = (a.startTime || '').trim();
+      const bStart = (b.startTime || '').trim();
+      if (!aStart && bStart) return 1;
+      if (aStart && !bStart) return -1;
+      if (aStart && bStart) {
+        const sDiff = aStart.localeCompare(bStart);
+        if (sDiff !== 0) return sDiff;
+      }
+
+      // 3. 終了時間の比較（早い順、未設定は末尾）
+      const aEnd = (a.endTime || '').trim();
+      const bEnd = (b.endTime || '').trim();
+      if (!aEnd && bEnd) return 1;
+      if (aEnd && !bEnd) return -1;
+      if (aEnd && bEnd) {
+        const eDiff = aEnd.localeCompare(bEnd);
+        if (eDiff !== 0) return eDiff;
+      }
+
+      // 4. タスク名順（昇順）
+      return (a.task || '').localeCompare(b.task || '', 'ja');
     }
 
     function getPriorityClass(task) {
