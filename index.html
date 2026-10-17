@@ -3066,11 +3066,24 @@
 
       try {
         setSyncStatus('削除中...', true);
-        await callBackendApi('deleteTask', { taskId });
+        const res = await callBackendApi('deleteTask', { 
+          taskId, 
+          taskName: task ? task.task : '',
+          taskDate: task ? task.date : ''
+        });
+        if (res && res.tasks) {
+          state.tasks = res.tasks.map(t => {
+            if (t.description) t.description = getContextDisplayName(t.description);
+            return t;
+          });
+          state.projects = applySavedFolderOrder(res.projects || []);
+          renderAll();
+        }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('削除エラー:', e);
         showToast('削除の同期に失敗しました');
+        setSyncStatus('エラー', false);
       }
     }
 

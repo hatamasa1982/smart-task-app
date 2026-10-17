@@ -606,7 +606,7 @@ function handleApiAction(action, payload) {
   } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
     result = completeTaskFromApp(payload.taskId);
   } else if (action === 'deleteTask') {
-    result = deleteTaskFromApp(payload.taskId);
+    result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
   } else if (action === 'saveProject') {
     result = addNewProjectFromApp(payload.projectData);
   } else if (action === 'saveContext') {
@@ -884,8 +884,11 @@ function parseTimeStringToDate(dateString, timeString) {
 /**
  * タスクIDから該当シートと行番号を検索（見つからない場合はタスク名でフォールバック検索）
  */
-function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate) {
+function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includeDoneSheet) {
   const candidateNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME];
+  if (includeDoneSheet) {
+    candidateNames.push(CONFIG.DONE_SHEET_NAME);
+  }
   
   // 1. まず taskId で完全一致検索
   if (taskId) {
@@ -1027,11 +1030,16 @@ function addNewProjectFromApp(projectData) {
 /**
  * アプリからタスクを削除する（カレンダー同期やリピートは行わず、行を削除）
  */
-function deleteTaskFromApp(taskId) {
+function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const location = findTaskLocationById(ss, taskId);
+  // 完了シートも含めて検索
+  const location = findTaskLocationById(ss, taskId, taskName, fallbackDate, true);
   
-  if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskId);
+  if (!location) {
+    // 一時ID（tmp_...）または見つからない場合でも、すでに削除されたとみなしてエラーにせず同期
+    console.warn("指定されたタスクが見つかりませんでした（すでに削除済みの可能性があります）。ID: " + taskId);
+    return getInitialData();
+  }
   
   const { sheet, row } = location;
   sheet.deleteRow(row);
