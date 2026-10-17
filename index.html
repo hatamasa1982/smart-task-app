@@ -3,50 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>プロジェクト・タスク管理</title>
+  <title>Smart Tasks - Toodledo Style</title>
   
   <!-- Google Fonts & Material Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0..1,0" rel="stylesheet" />
 
   <style>
     /* ----------------------------------
-       CSS変数 & 基本設定
+       Toodledo スタイル デザインシステム
     ---------------------------------- */
     :root {
-      --bg-color: #0b0f19;
-      --bg-gradient: radial-gradient(circle at 50% 0%, #151d30 0%, #0b0f19 70%);
-      --card-bg: rgba(22, 29, 49, 0.65);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover: rgba(30, 41, 69, 0.8);
+      /* カラーパレット（Toodledo クラシック ＆ モダン） */
+      --header-bg: #1e3a5f;         /* Toodledo ディープネイビー */
+      --header-text: #ffffff;
+      --rail-bg: #14263f;           /* 最左列アイコンバー */
+      --rail-active: #2b4c7e;
+      --sidebar-bg: #f8fafc;        /* サブサイドバー（ライトグレー） */
+      --sidebar-border: #e2e8f0;
+      --sidebar-hover: #edf2f7;
+      --sidebar-active: #e2e8f0;
+      --content-bg: #ffffff;        /* メイン背景 */
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      --text-muted: #94a3b8;
+      --border-color: #e2e8f0;
       
-      --text-main: #f3f4f6;
-      --text-sub: #9ca3af;
-      --text-muted: #6b7280;
+      /* アクセントカラー */
+      --primary-orange: #f59e0b;    /* Toodledo + ADD TASK ボタン色 */
+      --primary-orange-hover: #d97706;
+      --accent-blue: #0284c7;
+      --accent-star: #eab308;
       
-      --accent-biz: #3b82f6;      /* 仕事用：爽やかなブルー */
-      --accent-private: #a855f7;  /* 私用：鮮やかなパープル */
+      /* 期日ステータス */
+      --due-overdue: #dc2626;       /* 期限切れ：赤文字太字 */
+      --due-today: #b45309;         /* 今日：アンバー */
+      --due-future: #334155;        /* 今後：ダークグレー */
       
-      /* 期日ステータスカラー */
-      --status-overdue: #ef4444;  /* 期限切れ：コーラルレッド */
-      --status-today: #fbbf24;    /* 今日：ゴールド */
-      --status-upcoming: #34d399; /* 今後：エメラルドグリーン */
-      --status-nodate: #9ca3af;   /* 日付なし：グレー */
-      
-      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.15);
-      --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.4);
-      --glass-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
-      
-      --radius-sm: 8px;
-      --radius-md: 16px;
-      --radius-lg: 24px;
-      
-      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      
-      font-family: 'Outfit', 'Noto Sans JP', sans-serif;
+      /* テーブル関連 */
+      --table-header-bg: #0f2b48;
+      --table-header-text: #ffffff;
+      --table-group-bg: #e2e8f0;
+      --table-row-hover: #f1f5f9;
+      --table-row-border: #f1f5f9;
+
+      font-family: 'Inter', 'Noto Sans JP', sans-serif;
     }
 
     * {
@@ -57,391 +60,676 @@
     }
 
     body {
-      background-color: var(--bg-color);
-      background-image: var(--bg-gradient);
+      background-color: var(--content-bg);
       color: var(--text-main);
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
+      overflow: hidden;
+      font-size: 13px;
     }
 
     /* ----------------------------------
-       共通レイアウト
+       1. トップヘッダー
     ---------------------------------- */
-    header {
-      background: rgba(11, 15, 25, 0.8);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      padding: 16px;
+    header.toodledo-header {
+      height: 52px;
+      background: var(--header-bg);
+      color: var(--header-text);
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: center;
+      padding: 0 16px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      z-index: 50;
     }
 
-    .header-logo {
+    .header-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 16px;
     }
 
-    .header-logo span.icon {
-      color: var(--accent-biz);
-      font-size: 28px;
-      background: linear-gradient(135deg, var(--accent-biz), var(--accent-private));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .header-logo h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .main-container {
-      flex: 1;
-      max-width: 800px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 16px 16px 100px 16px; /* 下部ナビゲーションを避ける余白 */
-    }
-
-    /* ----------------------------------
-       上部タブ（項目切り替え & 画面切り替え）
-    ---------------------------------- */
-    .filter-tabs {
-      display: flex;
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: var(--radius-md);
-      padding: 4px;
-      margin-bottom: 20px;
-      border: 1px solid var(--card-border);
-    }
-
-    .filter-tab {
-      flex: 1;
-      text-align: center;
-      padding: 10px 0;
-      font-size: 14px;
-      font-weight: 500;
-      border-radius: calc(var(--radius-md) - 4px);
+    .menu-toggle-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: #fff;
       cursor: pointer;
-      transition: var(--transition);
-      user-select: none;
-      color: var(--text-sub);
+      padding: 4px;
     }
 
-    .filter-tab.active {
-      background: var(--card-bg);
-      color: var(--text-main);
-      box-shadow: var(--shadow-sm);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    /* ----------------------------------
-       タスクリスト表示領域
-    ---------------------------------- */
-    .task-section-header {
+    .logo-container {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin: 24px 0 12px 0;
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      cursor: pointer;
+      user-select: none;
     }
 
-    .task-section-header.overdue { color: var(--status-overdue); }
-    .task-section-header.today { color: var(--status-today); }
-    .task-section-header.upcoming { color: var(--status-upcoming); }
-    .task-section-header.nodate { color: var(--status-nodate); }
-
-    .task-section-header span {
-      font-size: 18px;
-    }
-
-    .task-list {
+    .logo-icon-circle {
+      width: 32px;
+      height: 32px;
+      background: #ffffff;
+      border-radius: 50%;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--header-bg);
+      font-weight: 800;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .logo-text span.brand {
+      color: #7dd3fc;
+    }
+
+    /* Toodledo風 + ADD TASK ボタン */
+    .btn-add-task-top {
+      background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+      color: #78350f;
+      border: 1px solid #d97706;
+      border-radius: 20px;
+      padding: 6px 18px;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: all 0.15s ease;
+    }
+
+    .btn-add-task-top:hover {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
       gap: 12px;
     }
 
-    /* ----------------------------------
-       タスクカード（グラスモルフィズム風）
-    ---------------------------------- */
-    .task-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
+    .search-box {
       display: flex;
       align-items: center;
-      gap: 14px;
-      box-shadow: var(--shadow-sm), var(--glass-shadow);
-      transition: var(--transition);
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 4px 12px;
+      gap: 6px;
+      color: #fff;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 12px;
+      width: 140px;
+      transition: width 0.2s ease;
+    }
+
+    .search-box input::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .search-box input:focus {
+      width: 200px;
+    }
+
+    .header-icon-btn {
+      background: transparent;
+      border: none;
+      color: #e2e8f0;
       cursor: pointer;
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* 左端のPrivate/Biz区分インジケータバー */
-    .task-card::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: var(--text-muted);
-    }
-    .task-card.Private::before { background: var(--accent-private); }
-    .task-card.Biz::before { background: var(--accent-biz); }
-
-    .task-card:hover {
-      background: var(--card-hover);
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-lg), var(--glass-shadow);
-    }
-
-    /* 完了チェックボタン */
-    .complete-btn {
-      width: 24px;
-      height: 24px;
+      padding: 6px;
       border-radius: 50%;
-      border: 2px solid var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease;
+    }
+
+    .header-icon-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .sync-status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #93c5fd;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+
+    /* ----------------------------------
+       2. メインレイアウト（3ペイン構成）
+    ---------------------------------- */
+    .app-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 2-1. 最左列ナビゲーションレイル (Rail) */
+    .nav-rail {
+      width: 50px;
+      background: var(--rail-bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 0;
+      gap: 8px;
+      flex-shrink: 0;
+      z-index: 40;
+    }
+
+    .rail-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: var(--transition);
-      flex-shrink: 0;
-      background: transparent;
+      transition: all 0.15s ease;
+      position: relative;
     }
 
-    .task-card.Private .complete-btn:hover { border-color: var(--accent-private); background: rgba(168, 85, 247, 0.1); }
-    .task-card.Biz .complete-btn:hover { border-color: var(--accent-biz); background: rgba(59, 130, 246, 0.1); }
-
-    .complete-btn span {
-      font-size: 16px;
-      color: transparent;
-      transition: var(--transition);
-      font-weight: bold;
+    .rail-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #ffffff;
     }
 
-    .complete-btn:active {
-      transform: scale(0.85);
+    .rail-btn.active {
+      background: var(--rail-active);
+      color: #ffffff;
     }
 
-    /* アニメーション用クラス */
-    .task-card.completing {
-      animation: completeFadeOut 0.5s forwards;
+    .rail-btn::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 54px;
+      background: #1e293b;
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+      z-index: 100;
     }
 
-    @keyframes completeFadeOut {
-      0% {
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 0.5;
-        transform: scale(0.95) translateX(30px);
-        background: rgba(16, 185, 129, 0.2);
-        border-color: var(--status-upcoming);
-      }
-      100% {
-        opacity: 0;
-        transform: scale(0.9) translateX(100px);
-        height: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-        margin-top: 0;
-        margin-bottom: 0;
-        border: none;
-      }
+    .rail-btn:hover::after {
+      opacity: 1;
     }
 
-    /* カードテキスト */
-    .task-info {
-      flex: 1;
+    /* 2-2. サブサイドバー（Folders / Calendar） */
+    .sub-sidebar {
+      width: 240px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      min-width: 0; /* はみ出し防止 */
+      flex-shrink: 0;
+      overflow-y: auto;
+      transition: transform 0.25s ease;
     }
 
-    .task-title {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--text-main);
-      word-break: break-all;
-    }
-
-    .task-meta {
+    .sidebar-header {
+      padding: 12px 14px;
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--sidebar-border);
+      background: #f1f5f9;
+      font-weight: 700;
+      font-size: 13px;
+      color: #334155;
+    }
+
+    .sidebar-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sidebar-icon-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #64748b;
+      padding: 2px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+    }
+
+    .sidebar-icon-btn:hover {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    /* フォルダリスト */
+    .folder-list {
+      list-style: none;
+      padding: 6px 0;
+    }
+
+    .folder-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 12.5px;
+      color: #334155;
+      transition: background 0.1s ease;
+      user-select: none;
+      border-left: 3px solid transparent;
+    }
+
+    .folder-item:hover {
+      background: var(--sidebar-hover);
+    }
+
+    .folder-item.active {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-weight: 600;
+      border-left-color: #0284c7;
+    }
+
+    .folder-item-left {
+      display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 12px;
-      color: var(--text-sub);
-    }
-
-    .project-badge {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 600;
-      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .task-card.Private .project-badge { color: #d8b4fe; }
-    .task-card.Biz .project-badge { color: #93c5fd; }
 
-    .time-badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
+    .folder-item-left span.icon {
+      font-size: 16px;
+      color: #64748b;
     }
 
-    .repeat-badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      color: var(--status-upcoming);
+    .folder-item.active span.icon {
+      color: #0284c7;
     }
 
-    /* 期日インジケータ */
-    .date-badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      font-weight: 600;
-    }
-    .task-card.overdue .date-badge { color: var(--status-overdue); }
-    .task-card.today .date-badge { color: var(--status-today); }
-    .task-card.upcoming .date-badge { color: var(--status-upcoming); }
-
-    /* 優先度 (Context) バッジ */
-    .context-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
-      padding: 1px 7px;
-      border-radius: 8px;
+    .folder-badge {
       font-size: 11px;
-      font-weight: 600;
-      white-space: nowrap;
-      letter-spacing: 0.02em;
-    }
-    .context-badge.priority-highest {
-      background: rgba(239, 68, 68, 0.22);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.4);
-    }
-    .context-badge.priority-high {
-      background: rgba(245, 158, 11, 0.22);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.4);
-    }
-    .context-badge.priority-normal {
-      background: rgba(59, 130, 246, 0.18);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.35);
-    }
-    .context-badge.priority-other {
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--text-sub);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      background: #e2e8f0;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 500;
     }
 
-    /* ----------------------------------
-       新規作成ボタン (FAB)
-    ---------------------------------- */
-    .fab {
-      position: fixed;
-      bottom: 80px; /* ボトムナビの上 */
-      right: 24px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent-biz), var(--accent-private));
-      box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+    .folder-item.active .folder-badge {
+      background: #bae6fd;
+      color: #0369a1;
+    }
+
+    .sidebar-add-folder-btn {
+      margin: 10px 14px;
+      padding: 6px 10px;
+      background: #ffffff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .sidebar-add-folder-btn:hover {
+      background: #f1f5f9;
+      color: #1e293b;
+      border-color: #94a3b8;
+    }
+
+    /* 2-3. メインコンテンツ領域 */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      background: #ffffff;
+      min-width: 0;
+    }
+
+    /* パンくず＆ビューヘッダー */
+    .view-breadcrumb-bar {
+      height: 38px;
+      background: #1b3a5b;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .breadcrumb-path {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .breadcrumb-path a {
+      color: #bae6fd;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .breadcrumb-path a:hover {
+      text-decoration: underline;
+    }
+
+    .view-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .view-action-link {
+      color: #e2e8f0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+    }
+
+    .view-action-link:hover {
+      color: #ffffff;
+    }
+
+    /* Quick Add Task バー */
+    .quick-add-container {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      background: #ffffff;
+      padding: 4px 12px;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .quick-add-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      padding: 8px 6px;
+      font-size: 13.5px;
+      color: var(--text-main);
+      font-family: inherit;
+    }
+
+    .quick-add-input::placeholder {
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    .btn-quick-add {
+      background: transparent;
+      border: none;
+      color: var(--primary-orange);
+      cursor: pointer;
+      font-size: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      cursor: pointer;
-      border: none;
-      z-index: 90;
-      transition: var(--transition);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      transition: background 0.15s ease;
     }
 
-    .fab:hover {
-      transform: translateY(-4px) scale(1.05);
-      box-shadow: 0 12px 30px rgba(168, 85, 247, 0.6);
-    }
-
-    .fab span {
-      font-size: 28px;
+    .btn-quick-add:hover {
+      background: #fef3c7;
     }
 
     /* ----------------------------------
-       下部ナビゲーション (スマホ対応)
+       3. Toodledo タスクテーブル
     ---------------------------------- */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 64px;
-      background: rgba(11, 15, 25, 0.9);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      z-index: 100;
+    .task-table-container {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: auto;
     }
 
-    .nav-item {
+    .toodledo-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    /* テーブルヘッダー */
+    .toodledo-table thead th {
+      background: var(--table-header-bg);
+      color: var(--table-header-text);
+      font-size: 11px;
+      font-weight: 600;
+      text-align: left;
+      padding: 7px 8px;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .toodledo-table thead th:last-child {
+      border-right: none;
+    }
+
+    /* 列幅の定義 */
+    .col-check { width: 32px; text-align: center !important; }
+    .col-star { width: 32px; text-align: center !important; }
+    .col-folder { width: 140px; }
+    .col-task { min-width: 250px; }
+    .col-due { width: 110px; }
+    .col-priority { width: 85px; }
+    .col-context { width: 110px; }
+    .col-time { width: 95px; }
+    .col-repeat { width: 75px; }
+    .col-actions { width: 45px; text-align: center !important; }
+
+    /* グループ見出し行（Due in the past, Today など） */
+    .table-group-row td {
+      background: #e6edf5;
+      color: #1e293b;
+      font-weight: 700;
+      font-size: 11.5px;
+      padding: 6px 10px;
+      border-top: 1px solid #cbd5e1;
+      border-bottom: 1px solid #cbd5e1;
+    }
+
+    .group-header-content {
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* タスクデータ行 */
+    .task-row {
+      border-bottom: 1px solid var(--table-row-border);
+      transition: background 0.1s ease;
+      font-size: 12.5px;
+      height: 34px;
+    }
+
+    .task-row:hover {
+      background: var(--table-row-hover);
+    }
+
+    .task-row.completed {
+      opacity: 0.55;
+      background: #fafafa;
+    }
+
+    .task-row td {
+      padding: 5px 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    /* チェックボックス */
+    .task-checkbox {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: #0284c7;
+    }
+
+    /* スター */
+    .task-star-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #cbd5e1;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .task-star-btn.active {
+      color: var(--accent-star);
+    }
+
+    /* フォルダ名バッジ */
+    .task-folder-cell {
+      display: inline-flex;
       align-items: center;
       gap: 4px;
-      color: var(--text-sub);
+      color: #475569;
       cursor: pointer;
-      font-size: 11px;
+    }
+
+    .task-folder-cell:hover {
+      text-decoration: underline;
+      color: #0284c7;
+    }
+
+    /* タスク名 */
+    .task-title-cell {
+      cursor: pointer;
       font-weight: 500;
-      transition: var(--transition);
-      user-select: none;
-      flex: 1;
-      padding: 8px 0;
+      color: #1e293b;
     }
 
-    .nav-item span.icon {
-      font-size: 24px;
+    .task-title-cell:hover {
+      color: #0284c7;
     }
 
-    .nav-item.active {
-      color: var(--text-main);
+    .task-row.completed .task-title-cell {
+      text-decoration: line-through;
+      color: #94a3b8;
     }
 
-    .nav-item.active span.icon {
-      color: var(--accent-biz);
-      font-variation-settings: 'FILL' 1;
+    /* 期日 */
+    .task-due-cell {
+      font-weight: 500;
+    }
+
+    .task-due-cell.overdue {
+      color: var(--due-overdue);
+      font-weight: 700;
+    }
+
+    .task-due-cell.today {
+      color: var(--due-today);
+      font-weight: 600;
+    }
+
+    .task-due-cell.future {
+      color: var(--due-future);
+    }
+
+    .task-due-cell.nodate {
+      color: #94a3b8;
+    }
+
+    /* 優先度 */
+    .task-priority-cell {
+      font-size: 11.5px;
+      color: #475569;
+    }
+
+    .priority-highest { color: #dc2626; font-weight: bold; }
+    .priority-high { color: #ea580c; font-weight: 600; }
+    .priority-normal { color: #4b5563; }
+
+    /* 操作アイコン */
+    .row-action-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .row-action-btn:hover {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    /* 4. フッターステータスバー */
+    .toodledo-footer {
+      height: 32px;
+      background: #f8fafc;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 11px;
+      color: #64748b;
+      flex-shrink: 0;
     }
 
     /* ----------------------------------
-       ポップアップモーダル
+       モーダル & ポップアップ
     ---------------------------------- */
     .modal-overlay {
       position: fixed;
@@ -449,17 +737,15 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      z-index: 200;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
       opacity: 0;
       pointer-events: none;
-      transition: var(--transition);
-      padding: 16px;
+      transition: opacity 0.2s ease;
     }
 
     .modal-overlay.active {
@@ -468,207 +754,129 @@
     }
 
     .modal-card {
-      background: #111827;
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-lg);
-      width: 100%;
+      background: #ffffff;
+      border-radius: 12px;
+      width: 90%;
       max-width: 500px;
       max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: var(--shadow-lg);
-      transform: translateY(30px);
-      transition: var(--transition);
-    }
-
-    .modal-overlay.active .modal-card {
-      transform: translateY(0);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
     }
 
     .modal-header {
-      padding: 20px;
-      border-bottom: 1px solid var(--card-border);
+      padding: 16px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
     }
 
     .modal-header h2 {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
-    }
-
-    .close-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-sub);
-      cursor: pointer;
+      color: #1e293b;
     }
 
     .modal-body {
       padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
 
-    /* ----------------------------------
-       フォームパーツ
-    ---------------------------------- */
     .form-group {
-      margin-bottom: 18px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: var(--text-sub);
-    }
-
-    .form-input, .form-select, .form-textarea {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      color: var(--text-main);
-      padding: 12px;
-      font-size: 15px;
-      transition: var(--transition);
-      font-family: inherit;
-    }
-
-    .form-select option {
-      background-color: #111827; /* ドロップダウンメニューの背景を濃い色に固定 */
-      color: var(--text-main);   /* 文字色を白に固定 */
-    }
-
-    .form-input:focus, .form-select:focus, .form-textarea:focus {
-      outline: none;
-      border-color: var(--accent-biz);
-      background: rgba(255, 255, 255, 0.08);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-    }
-
-    /* Biz/Privateセグメント切り替え */
-    .segment-control {
       display: flex;
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: var(--radius-sm);
-      padding: 3px;
-      border: 1px solid var(--card-border);
-    }
-
-    .segment-btn {
-      flex: 1;
-      text-align: center;
-      padding: 10px 0;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: calc(var(--radius-sm) - 2px);
-      cursor: pointer;
-      transition: var(--transition);
-      color: var(--text-sub);
-      user-select: none;
-    }
-
-    .segment-btn.Biz.active {
-      background: var(--accent-biz);
-      color: white;
-    }
-
-    .segment-btn.Private.active {
-      background: var(--accent-private);
-      color: white;
-    }
-
-    /* 時間選択（横並び） */
-    .time-range {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-    }
-
-    .time-range .form-group {
-      flex: 1;
-      margin-bottom: 0;
-    }
-
-    .time-separator {
-      color: var(--text-sub);
-      margin-top: 24px;
-    }
-
-    .modal-footer {
-      padding: 20px;
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      gap: 12px;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: var(--radius-sm);
-      border: none;
-      cursor: pointer;
-      transition: var(--transition);
-      text-align: center;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
       gap: 6px;
     }
 
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--text-main);
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
     }
+
+    .form-input, .form-select {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #1e293b;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: #0284c7;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      border: none;
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+    }
+
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: #cbd5e1;
+      color: #1e293b;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--accent-biz), var(--accent-private));
-      color: white;
-    }
-    .btn-primary:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-    
-    .btn-danger {
-      background: var(--status-overdue);
-      color: white;
-      max-width: 80px;
-      flex: none;
-    }
-    .btn-danger:hover {
-      opacity: 0.9;
+      background: #0284c7;
+      color: #ffffff;
     }
 
-    /* ----------------------------------
-       トースト通知 (Toast)
-    ---------------------------------- */
+    .btn-primary:hover {
+      background: #0369a1;
+    }
+
+    /* トースト通知 */
     .toast-container {
       position: fixed;
-      bottom: 84px;
+      bottom: 24px;
       left: 50%;
       transform: translateX(-50%) translateY(20px);
-      background: rgba(17, 24, 39, 0.9);
-      border: 1px solid rgba(52, 211, 153, 0.3);
-      padding: 12px 24px;
+      background: #1e293b;
+      color: #ffffff;
+      padding: 10px 20px;
       border-radius: 30px;
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
       display: flex;
       align-items: center;
       gap: 8px;
-      color: var(--status-upcoming);
-      font-weight: 600;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 500;
       opacity: 0;
       pointer-events: none;
-      transition: var(--transition);
-      z-index: 300;
+      transition: all 0.25s ease;
+      z-index: 2000;
     }
 
     .toast-container.active {
@@ -676,321 +884,223 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* ----------------------------------
-       ローディングスピナー
-    ---------------------------------- */
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(11, 15, 25, 0.7);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      z-index: 500;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      opacity: 0;
-      pointer-events: none;
-      transition: var(--transition);
+    /* インライン直接編集用スタイル */
+    .inline-edit-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 3px 6px;
+      font-size: 12.5px;
+      font-family: inherit;
+      border: 1px solid #0284c7;
+      border-radius: 4px;
+      outline: none;
+      background: #ffffff;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
     }
 
-    .loading-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
+    .inline-edit-date, .inline-edit-select, .inline-edit-time {
+      box-sizing: border-box;
+      padding: 2px 4px;
+      font-size: 11.5px;
+      font-family: inherit;
+      border: 1px solid #0284c7;
+      border-radius: 4px;
+      outline: none;
+      background: #ffffff;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
     }
 
-    .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid rgba(255, 255, 255, 0.1);
-      border-top-color: var(--accent-biz);
-      border-radius: 50%;
-      animation: spin 1s infinite linear;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* ----------------------------------
-       プロジェクト管理 & 履歴画面用スタイル
-    ---------------------------------- */
-    .sub-page {
-      display: none;
-    }
-    .sub-page.active {
-      display: block;
-      animation: fadeIn 0.3s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .project-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    .project-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      padding: 16px;
-      text-align: center;
-      font-weight: 600;
-      font-size: 14px;
-      position: relative;
-      overflow: hidden;
-    }
-    .project-card.Private { border-top: 3px solid var(--accent-private); }
-    .project-card.Biz { border-top: 3px solid var(--accent-biz); }
-    
-    .done-task-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px dashed var(--card-border);
-      border-radius: var(--radius-sm);
-      padding: 12px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      opacity: 0.7;
-    }
-
-    .done-task-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-    
-    .done-task-title {
-      font-size: 14px;
-      text-decoration: line-through;
-      color: var(--text-sub);
-    }
-
-    /* ----------------------------------
-       インフォメッセージ（データが空のとき）
-    ---------------------------------- */
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--text-sub);
-    }
-    .empty-state span {
-      font-size: 48px;
-      color: var(--text-muted);
-      margin-bottom: 12px;
-    }
-
-
-    /* 同期中インジケータ */
-    .sync-indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: var(--accent-biz);
-      background: rgba(59, 130, 246, 0.1);
-      padding: 4px 10px;
-      border-radius: 12px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease;
-      margin-left: 12px;
-    }
-    .sync-indicator.active {
-      opacity: 1;
-    }
-    .spin-icon {
-      animation: spin 1s infinite linear;
-      font-size: 16px !important;
-    }
-    
-    .header-icon-btn {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid var(--card-border);
-      color: var(--text-sub);
-      width: 40px;
-      height: 40px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .editable-cell {
       cursor: pointer;
-      transition: var(--transition);
+      border-radius: 3px;
+      padding: 2px 4px;
+      transition: background 0.1s ease;
     }
-    .header-icon-btn:hover {
-      background: rgba(255, 255, 255, 0.12);
-      color: var(--text-main);
-      transform: translateY(-1px);
+
+    .editable-cell:hover {
+      background: rgba(2, 132, 199, 0.08);
+      outline: 1px dashed #93c5fd;
     }
-    .status-badge-pill {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 9999px;
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .status-badge-connected {
-      background: rgba(52, 211, 153, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(52, 211, 153, 0.3);
-    }
-    .status-badge-disconnected {
-      background: rgba(251, 191, 36, 0.15);
-      color: #fbbf24;
-      border: 1px solid rgba(251, 191, 36, 0.3);
+
+    /* レスポンシブ (モバイル対応) */
+    @media (max-width: 768px) {
+      .menu-toggle-btn {
+        display: block;
+      }
+      .nav-rail {
+        display: none;
+      }
+      .sub-sidebar {
+        position: fixed;
+        top: 52px;
+        left: 0;
+        bottom: 0;
+        z-index: 80;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+      }
+      .sub-sidebar.open {
+        transform: translateX(0);
+      }
+      .col-folder, .col-repeat, .col-time {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
 
-  <!-- ローディング表示 -->
-  <div id="loading" class="loading-overlay">
-    <div class="spinner"></div>
-    <div style="font-weight: 500; font-size: 14px;">読み込み中...</div>
-  </div>
-
-  <!-- ヘッダー -->
-  <header>
-    <div class="header-logo">
-      <span class="material-symbols-outlined icon">task_alt</span>
-      <h1 id="app-title">プロジェクト・タスク管理</h1>
-      <!-- 同期中インジケータ -->
-      <div id="sync-indicator" class="sync-indicator">
-        <span class="material-symbols-outlined spin-icon">sync</span>
-        <span>同期中...</span>
+  <!-- トップヘッダー -->
+  <header class="toodledo-header">
+    <div class="header-left">
+      <button class="menu-toggle-btn" onclick="toggleSidebar()" title="メニュー切替">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <div class="logo-container" onclick="resetFilters()">
+        <div class="logo-icon-circle">
+          <span class="material-symbols-outlined" style="font-size: 20px; color: #1e3a5f;">check</span>
+        </div>
+        <div class="logo-text">
+          <span>Tasks</span>
+          <span style="font-size: 11px; font-weight: normal; margin-left: 8px; color: #93c5fd;">Toodledo Style</span>
+        </div>
       </div>
+      <!-- + ADD TASK ボタン -->
+      <button class="btn-add-task-top" onclick="openAddModal()">
+        <span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+        <span>ADD TASK</span>
+      </button>
     </div>
-    <div id="header-actions" style="display: flex; align-items: center; gap: 10px;">
-      <button id="settings-btn" class="header-icon-btn" onclick="openSettingsModal()" title="スプレッドシート連携設定">
+
+    <div class="header-right">
+      <!-- 検索バー -->
+      <div class="search-box">
+        <span class="material-symbols-outlined" style="font-size: 16px;">search</span>
+        <input type="text" id="quick-search-input" placeholder="Search tasks..." oninput="handleSearch(this.value)">
+      </div>
+
+      <!-- 同期ステータス -->
+      <div id="sync-status" class="sync-status-indicator" title="スプレッドシート同期ステータス">
+        <span class="material-symbols-outlined" style="font-size: 14px;">cloud_done</span>
+        <span id="sync-text">同期完了</span>
+      </div>
+
+      <!-- 設定アイコン -->
+      <button class="header-icon-btn" onclick="openSettingsModal()" title="スプレッドシート連携設定">
         <span class="material-symbols-outlined">settings</span>
       </button>
     </div>
   </header>
 
-  <!-- メインコンテンツ -->
-  <div class="main-container">
+  <!-- アプリメインコンテナ -->
+  <div class="app-container">
+    
+    <!-- 1. 最左列ナビゲーションレイル -->
+    <nav class="nav-rail">
+      <button class="rail-btn active" id="rail-btn-folders" onclick="setRailMode('folders')" data-tooltip="Folders (プロジェクト)">
+        <span class="material-symbols-outlined">folder</span>
+      </button>
+      <button class="rail-btn" id="rail-btn-calendar" onclick="setRailMode('calendar')" data-tooltip="Calendar (カレンダー)">
+        <span class="material-symbols-outlined">calendar_month</span>
+      </button>
+      <button class="rail-btn" id="rail-btn-all" onclick="selectFolder('All')" data-tooltip="All Tasks (全タスク)">
+        <span class="material-symbols-outlined">playlist_add_check</span>
+      </button>
+      <button class="rail-btn" id="rail-btn-history" onclick="toggleCompletedTasksView()" data-tooltip="Completed Tasks (完了タスク)">
+        <span class="material-symbols-outlined">history</span>
+      </button>
+    </nav>
 
-    <!-- ==================== 1. タスク一覧画面 ==================== -->
-    <div id="page-tasks" class="sub-page active">
-      <!-- 区分フィルター (All / Biz / Private) -->
-      <div class="filter-tabs">
-        <div class="filter-tab active" onclick="setFilterType('All')">すべて</div>
-        <div class="filter-tab" onclick="setFilterType('Biz')">Biz</div>
-        <div class="filter-tab" onclick="setFilterType('Private')">Private</div>
-      </div>
-
-      <!-- 表示モード切り替え（期日順 / 日付指定 / プロジェクト別） -->
-      <div class="filter-tabs" style="margin-top: 8px; background: rgba(255, 255, 255, 0.02);">
-        <div class="filter-tab active" id="mode-tab-group" onclick="setViewMode('group')">
-          <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">format_list_bulleted</span>期日順
+    <!-- 2. サブサイドバー（Folders / プロジェクト一覧） -->
+    <aside class="sub-sidebar" id="sub-sidebar">
+      <div class="sidebar-header">
+        <span id="sidebar-header-title">Folders</span>
+        <div class="sidebar-header-actions">
+          <button class="sidebar-icon-btn" onclick="promptNewFolder()" title="新しいフォルダを追加">
+            <span class="material-symbols-outlined" style="font-size: 18px;">edit</span>
+          </button>
         </div>
-        <div class="filter-tab" id="mode-tab-date" onclick="setViewMode('date')">
-          <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">calendar_month</span>日付指定
-        </div>
-        <div class="filter-tab" id="mode-tab-project" onclick="setViewMode('project')">
-          <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">folder_open</span>プロジェクト別
-        </div>
       </div>
 
-      <!-- 日付指定フィルター（デフォルト非表示） -->
-      <div id="date-filter-container" class="form-group" style="display: none; margin-top: 12px; background: var(--card-bg); padding: 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
-        <label class="form-label" for="task-date-filter-input">日付を選択</label>
-        <input type="date" id="task-date-filter-input" class="form-input" onchange="renderTaskList()">
-      </div>
+      <!-- フォルダ一覧 -->
+      <ul class="folder-list" id="folder-list">
+        <!-- JSで動的生成 -->
+      </ul>
 
-      <!-- プロジェクト別フィルター（デフォルト非表示） -->
-      <div id="project-filter-container" class="form-group" style="display: none; margin-top: 12px; background: var(--card-bg); padding: 12px; border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
-        <label class="form-label" for="task-project-filter-select">プロジェクトを選択</label>
-        <select id="task-project-filter-select" class="form-select" onchange="renderTaskList()"></select>
-      </div>
+      <!-- + Add a folder ボタン -->
+      <button class="sidebar-add-folder-btn" onclick="promptNewFolder()">
+        <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+        <span>Add a folder</span>
+      </button>
+    </aside>
 
-      <!-- タスクリストコンテナ（JSで中身を構築） -->
-      <div id="task-list-container"></div>
-    </div>
-
-    <!-- ==================== 2. プロジェクト管理画面 ==================== -->
-    <div id="page-projects" class="sub-page">
-      <div class="task-section-header upcoming">
-        <span class="material-symbols-outlined">folder_open</span>
-        <h2>プロジェクト一覧</h2>
-      </div>
-      <div class="project-grid" id="project-list-container"></div>
+    <!-- 3. メインコンテンツ領域 -->
+    <main class="main-content">
       
-      <div class="task-section-header" style="margin-top: 40px;">
-        <span class="material-symbols-outlined">create_new_folder</span>
-        <h2>新規プロジェクト追加</h2>
+      <!-- パンくずバー -->
+      <div class="view-breadcrumb-bar">
+        <div class="breadcrumb-path" id="breadcrumb-path">
+          <a onclick="selectFolder('All')">Tasks</a>
+          <span>&gt;</span>
+          <span id="breadcrumb-mode">Folders</span>
+          <span>&gt;</span>
+          <strong id="breadcrumb-current-folder">All Tasks</strong>
+        </div>
+        <div class="view-actions">
+          <span class="view-action-link" onclick="toggleSortOrder()">
+            <span class="material-symbols-outlined" style="font-size: 16px;">sort</span>
+            <span id="sort-label">SORT: Due Date</span>
+          </span>
+        </div>
       </div>
-      <div class="project-card" style="text-align: left; background: var(--card-bg);">
-        <div class="form-group">
-          <label class="form-label">プロジェクト区分</label>
-          <div class="segment-control" id="new-project-type">
-            <div class="segment-btn Private active" onclick="setNewProjectType('Private')">Private</div>
-            <div class="segment-btn Biz" onclick="setNewProjectType('Biz')">Biz</div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="project-name-input">プロジェクト名</label>
-          <input type="text" id="project-name-input" class="form-input" placeholder="例: #もくもく, 260331_業務">
-        </div>
-        <button class="btn btn-primary" onclick="submitNewProject()" style="width: 100%;">
-          <span class="material-symbols-outlined">add</span>プロジェクトを追加する
+
+      <!-- Quick Add Task バー -->
+      <div class="quick-add-container">
+        <span class="material-symbols-outlined" style="color: #94a3b8; font-size: 18px;">add_task</span>
+        <input type="text" id="quick-add-input" class="quick-add-input" placeholder="Quick Add Task (Enter to save)" onkeydown="if(event.key === 'Enter') handleQuickAdd()">
+        <button class="btn-quick-add" onclick="handleQuickAdd()" title="タスクを追加">
+          <span class="material-symbols-outlined">add</span>
         </button>
       </div>
-    </div>
 
-    <!-- ==================== 3. 完了履歴画面 ==================== -->
-    <div id="page-history" class="sub-page">
-      <div class="task-section-header nodate">
-        <span class="material-symbols-outlined">history</span>
-        <h2>最近完了したタスク（直近50件）</h2>
+      <!-- タスクテーブル -->
+      <div class="task-table-container">
+        <table class="toodledo-table">
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="col-star">★</th>
+              <th class="col-folder">Folder</th>
+              <th class="col-task">Task</th>
+              <th class="col-due">Due Date</th>
+              <th class="col-priority">Priority</th>
+              <th class="col-context">Context</th>
+              <th class="col-time">Time</th>
+              <th class="col-repeat">Repeat</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="task-table-body">
+            <!-- JSで動的生成 -->
+          </tbody>
+        </table>
       </div>
-      <div class="task-list" id="history-list-container"></div>
-    </div>
 
-  </div>
+      <!-- フッター -->
+      <footer class="toodledo-footer">
+        <div id="footer-stats">Displayed Tasks: 0 active and 0 completed.</div>
+        <div>Toodledo Workflow for はた氏</div>
+      </footer>
 
-  <!-- フローティングアクションボタン (FAB) -->
-  <button id="add-task-fab" class="fab" onclick="openAddModal()">
-    <span class="material-symbols-outlined">add</span>
-  </button>
-
-  <!-- 下部ナビゲーションバー -->
-  <div class="bottom-nav">
-    <div class="nav-item active" onclick="switchPage('tasks', this)">
-      <span class="material-symbols-outlined icon">playlist_add_check</span>
-      <div>タスク</div>
-    </div>
-    <div class="nav-item" onclick="switchPage('projects', this)">
-      <span class="material-symbols-outlined icon">folder</span>
-      <div>フォルダ</div>
-    </div>
-    <div class="nav-item" onclick="switchPage('history', this)">
-      <span class="material-symbols-outlined icon">history</span>
-      <div>履歴</div>
-    </div>
+    </main>
   </div>
 
   <!-- ==================== タスク作成・編集モーダル ==================== -->
   <div id="task-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 id="modal-title">タスクを作成</h2>
-        <button class="close-btn" onclick="closeModal()">
+        <h2 id="modal-title">タスクを編集</h2>
+        <button class="sidebar-icon-btn" onclick="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1000,77 +1110,71 @@
         <!-- 区分（Biz / Private） -->
         <div class="form-group">
           <label class="form-label">区分</label>
-          <div class="segment-control" id="task-type-segment">
-            <div class="segment-btn Private active" onclick="setFormTaskType('Private')">Private</div>
-            <div class="segment-btn Biz" onclick="setFormTaskType('Biz')">Biz</div>
-          </div>
+          <select id="task-type-select" class="form-select">
+            <option value="Biz">Biz (仕事)</option>
+            <option value="Private">Private (個人)</option>
+          </select>
         </div>
 
-        <!-- プロジェクト選択 -->
+        <!-- プロジェクト（フォルダ） -->
         <div class="form-group">
-          <label class="form-label" for="task-project-select">プロジェクト</label>
+          <label class="form-label" for="task-project-select">フォルダ (Project)</label>
           <select id="task-project-select" class="form-select"></select>
         </div>
 
         <!-- タスク名 -->
         <div class="form-group">
           <label class="form-label" for="task-title-input">タスク名</label>
-          <input type="text" id="task-title-input" class="form-input" placeholder="タスク内容を入力">
+          <input type="text" id="task-title-input" class="form-input" placeholder="タスク名を入力">
         </div>
 
         <!-- 期日 -->
         <div class="form-group">
-          <label class="form-label" for="task-date-input">期日</label>
+          <label class="form-label" for="task-date-input">期日 (Due Date)</label>
           <input type="date" id="task-date-input" class="form-input">
         </div>
 
         <!-- 時間（開始・終了） -->
-        <div class="time-range">
-          <div class="form-group">
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
             <label class="form-label" for="task-start-input">開始時間</label>
             <input type="time" id="task-start-input" class="form-input">
           </div>
-          <div class="time-separator">〜</div>
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
             <label class="form-label" for="task-end-input">終了時間</label>
             <input type="time" id="task-end-input" class="form-input">
           </div>
         </div>
 
-        <!-- 繰り返し (Repeat) -->
-        <div class="form-group" style="margin-top: 18px;">
-          <label class="form-label" for="task-repeat-select">リピート</label>
+        <!-- 優先度 / Context -->
+        <div class="form-group">
+          <label class="form-label" for="task-context-select">優先度 / Context</label>
+          <select id="task-context-select" class="form-select">
+            <option value="">なし</option>
+            <option value="最優先">🔥 最優先</option>
+            <option value="優先">⭐ 優先</option>
+            <option value="隙間時間">☕ 隙間時間</option>
+            <option value="000=inbox">000=inbox</option>
+            <option value="024=後回し可">024=後回し可</option>
+          </select>
+        </div>
+
+        <!-- リピート -->
+        <div class="form-group">
+          <label class="form-label" for="task-repeat-select">リピート (Repeat)</label>
           <select id="task-repeat-select" class="form-select">
             <option value="None">なし (None)</option>
-            <option value="Copy">コピー (Copy)</option>
             <option value="Daily">毎日 (Daily)</option>
             <option value="Weekly">毎週 (Weekly)</option>
             <option value="Biweekly">隔週 (Biweekly)</option>
             <option value="Monthly">毎月 (Monthly)</option>
           </select>
         </div>
-
-        <!-- 優先度 / Context -->
-        <div class="form-group" style="margin-top: 18px;">
-          <label class="form-label" for="task-context-select">優先度 (Context)</label>
-          <select id="task-context-select" class="form-select">
-            <option value="">なし</option>
-            <option value="最優先">🔥 最優先</option>
-            <option value="優先">⭐ 優先</option>
-            <option value="隙間時間">☕ 隙間時間</option>
-          </select>
-        </div>
-
-        <!-- 続けて登録するチェックボックス -->
-        <div class="form-group" id="keep-open-group" style="display: flex; align-items: center; gap: 8px; margin-top: 16px;">
-          <input type="checkbox" id="task-keep-open" style="width: 18px; height: 18px; cursor: pointer;">
-          <label for="task-keep-open" style="font-size: 14px; color: var(--text-sub); cursor: pointer; user-select: none;">続けて別のタスクを登録する</label>
-        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="submitTaskForm()">
-          <span class="material-symbols-outlined">save</span><span id="save-btn-text">保存</span>
+          <span class="material-symbols-outlined" style="font-size: 16px;">save</span>保存する
         </button>
       </div>
     </div>
@@ -1081,1089 +1185,762 @@
     <div class="modal-card">
       <div class="modal-header">
         <h2>スプレッドシート連携設定</h2>
-        <button class="close-btn" onclick="closeSettingsModal()">
+        <button class="sidebar-icon-btn" onclick="closeSettingsModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
-        <div style="margin-bottom: 16px; padding: 12px; background: rgba(255, 255, 255, 0.04); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
-          <div style="font-size: 13px; color: var(--text-sub); margin-bottom: 6px;">接続ステータス</div>
-          <div id="connection-status-badge">
-            <span class="status-badge-pill status-badge-disconnected">
-              <span class="material-symbols-outlined" style="font-size: 14px;">cloud_off</span>
-              <span>未接続 (モックモード)</span>
-            </span>
-          </div>
-        </div>
-
         <div class="form-group">
           <label class="form-label" for="gas-api-url-input">GAS ウェブアプリURL</label>
           <input type="text" id="gas-api-url-input" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
-          <small style="color: var(--text-muted); font-size: 12px; line-height: 1.5; margin-top: 6px; display: block;">
-            スプレッドシートの「拡張機能」>「Apps Script」でCode.gsを貼り付け、「デプロイ」>「ウェブアプリ」で発行されたURLを入力してください。<br>
-            ※ アクセスできるユーザー:「全員」に設定してください。
-          </small>
         </div>
       </div>
-      <div class="modal-footer" style="justify-content: space-between;">
-        <button class="btn btn-secondary" onclick="testConnection()">
-          <span class="material-symbols-outlined">network_check</span>接続テスト
-        </button>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" onclick="closeSettingsModal()">閉じる</button>
-          <button class="btn btn-primary" onclick="saveSettingsUrl()">
-            <span class="material-symbols-outlined">check</span>保存する
-          </button>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="testConnection()">接続テスト</button>
+        <button class="btn btn-primary" onclick="saveSettingsUrl()">保存する</button>
       </div>
     </div>
   </div>
 
   <!-- トースト通知 -->
   <div id="toast" class="toast-container">
-    <span class="material-symbols-outlined">check_circle</span>
+    <span class="material-symbols-outlined" style="color: #34d399;">check_circle</span>
     <span id="toast-message">完了しました</span>
   </div>
 
   <!-- ==================== JavaScript ロジック ==================== -->
   <script>
-    // GAS環境判定（google.script.run または Googleホスト名）
+    // GAS環境判定
     function isGasEnvironment() {
-      if (typeof google !== 'undefined' && google && google.script && google.script.run) {
-        return true;
-      }
+      if (typeof google !== 'undefined' && google && google.script && google.script.run) return true;
       const host = window.location.hostname;
-      if (host.includes('googleusercontent.com') || host.includes('script.google.com')) {
-        return true;
-      }
-      return false;
+      return host.includes('googleusercontent.com') || host.includes('script.google.com');
     }
 
-    // GAS実行オブジェクトを取得（読み込み遅延に対応）
     async function getGasRunner() {
       for (let i = 0; i < 30; i++) {
-        if (typeof google !== 'undefined' && google && google.script && google.script.run) {
-          return google.script.run;
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        if (typeof google !== 'undefined' && google && google.script && google.script.run) return google.script.run;
+        await new Promise(r => setTimeout(r, 100));
       }
       return null;
     }
 
-    // ストレージキー & デフォルトAPI URL
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
     const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
 
-    // GAS Web API URL (古い無効URLがキャッシュされている場合は新URLに自動移行)
-    const storedGasUrl = localStorage.getItem(GAS_URL_KEY);
-    if (!storedGasUrl || storedGasUrl.includes('AKfycbx_pKRx8HeqMvgEUNsve331cFF6L4Js7-rL1U4MFHPHcWiJOaZKVsK0zoJW1HwOCgxJrw')) {
-      localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL);
-    }
     let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
 
-    // モックデータ (ローカルブラウザ確認・URL未設定時用)
-    const MOCK_DATA = {
-      tasks: [
-        { id: "1", status: false, repeat: "Daily", type: "Private", projectName: "#もくもく", projectId: "101", task: "朝のスクワット・ストレッチ", date: getOffsetDateString(0), startTime: "07:30", endTime: "08:00", description: "毎日の習慣にする" },
-        { id: "2", status: false, repeat: "None", type: "Biz", projectName: "260307_とわ機農海外", projectId: "201", task: "海外市場データのまとめ", date: getOffsetDateString(-1), startTime: "10:00", endTime: "12:00", description: "期限切れのテストデータ" },
-        { id: "3", status: false, repeat: "Weekly", type: "Private", projectName: "#ノンプロ研", projectId: "301", task: "週次振り返り＆学習計画", date: getOffsetDateString(0), startTime: "21:00", endTime: "22:00", description: "今週の進捗をまとめる" },
-        { id: "4", status: false, repeat: "None", type: "Biz", projectName: "260414_とわ機農国内", projectId: "203", task: "国内代理店とのミーティング", date: getOffsetDateString(1), startTime: "14:00", endTime: "15:00", description: "新商品のフィードバックをもらう" },
-        { id: "5", status: false, repeat: "Monthly", type: "Private", projectName: "#読書", projectId: "306", task: "月イチの課題図書読了", date: getOffsetDateString(5), startTime: "", endTime: "", description: "「世界の一流はなぜ瞑想をするのか」" },
-        { id: "6", status: false, repeat: "None", type: "Private", projectName: "#inbox", projectId: "100", task: "部屋の片付け", date: "", startTime: "", endTime: "", description: "期日なしタスクのテスト" }
-      ],
-      projects: [
-        { id: "100", name: "#inbox", type: "Private" },
-        { id: "101", name: "#もくもく", type: "Private" },
-        { id: "201", name: "260307_とわ機農海外", type: "Biz" },
-        { id: "203", name: "260414_とわ機農国内", type: "Biz" },
-        { id: "301", name: "#ノンプロ研", type: "Private" },
-        { id: "306", name: "#読書", type: "Private" }
-      ],
-      doneTasks: [
-        { id: "10", status: true, repeat: "None", type: "Private", projectName: "#もくもく", projectId: "101", task: "タスク管理アプリ開発の構想", date: getOffsetDateString(-1), startTime: "19:00", endTime: "20:00", description: "完了タスクのサンプル" }
-      ]
-    };
-
-    // アプリケーション状態
+    // アプリ状態
     let state = {
       tasks: [],
       projects: [],
       doneTasks: [],
-      filterType: 'All', // 'All', 'Biz', 'Private'
-      viewMode: 'group', // 'group' (期日順), 'date' (日付指定), 'project' (プロジェクト別)
-      activePage: 'tasks', // 'tasks', 'projects', 'history'
-      formTaskType: 'Private',
-      newProjectType: 'Private'
+      contexts: [],
+      selectedFolder: 'All', // 'All', 'No Folder', または プロジェクト名
+      selectedDate: null,    // カレンダー選択日付 (YYYY-MM-DD)
+      railMode: 'folders',   // 'folders', 'calendar'
+      showCompleted: false,  // 完了タスク表示切替
+      searchQuery: '',
+      sortField: 'dueDate'   // 'dueDate', 'priority'
     };
 
-    // ----------------------------------
-    // 通信レイヤー (GAS環境 / 外部Web API / モック)
-    // ----------------------------------
+    // 初期化
+    window.addEventListener('DOMContentLoaded', async () => {
+      loadCachedData();
+      await fetchInitialData();
+    });
 
+    // ----------------------------------
+    // 通信レイヤー
+    // ----------------------------------
     async function callBackendApi(action, payload = {}) {
-      // 1. GAS実行環境内（直接埋め込み実行時）
       if (isGasEnvironment()) {
         const runner = await getGasRunner();
         if (runner) {
           return new Promise((resolve, reject) => {
-            const api = runner
-              .withSuccessHandler(resolve)
-              .withFailureHandler(reject);
-            if (action === 'getInitialData') {
-              api.getInitialData();
-            } else if (action === 'saveTask') {
-              if (payload.taskData && payload.taskData.id) {
-                api.updateTaskFromApp(payload.taskData);
-              } else {
-                api.addNewTaskFromApp(payload.taskData);
-              }
-            } else if (action === 'completeTask' || action === 'toggleTaskStatus') {
-              api.completeTaskFromApp(payload.taskId);
-            } else if (action === 'deleteTask') {
-              api.deleteTaskFromApp(payload.taskId);
-            } else if (action === 'saveProject') {
-              api.addNewProjectFromApp(payload.projectData);
-            } else {
-              reject(new Error('未対応のアクションです: ' + action));
+            const api = runner.withSuccessHandler(resolve).withFailureHandler(reject);
+            if (action === 'getInitialData') api.getInitialData();
+            else if (action === 'saveTask') {
+              if (payload.taskData && payload.taskData.id) api.updateTaskFromApp(payload.taskData);
+              else api.addNewTaskFromApp(payload.taskData);
             }
+            else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId);
+            else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId);
+            else if (action === 'saveProject') api.addNewProjectFromApp(payload.projectData);
+            else reject(new Error('未対応のアクションです: ' + action));
           });
-        } else {
-          throw new Error('Google Apps Script連携の準備中です。少し待って再読み込みしてください。');
         }
       }
 
-      // 2. 外部環境（GitHub Pages等）でGAS Web API URLが設定されている場合
       if (gasApiUrl) {
-        // データ取得 (getInitialData) は高速かつリダイレクトに強い GET で取得
         if (action === 'getInitialData') {
           const sep = gasApiUrl.includes('?') ? '&' : '?';
           const res = await fetch(`${gasApiUrl}${sep}action=getInitialData`);
           const json = await res.json();
-          if (json && json.success) {
-            return json.data;
-          } else {
-            throw new Error((json && json.error) || 'データ取得に失敗しました');
-          }
+          if (json && json.success) return json.data;
+          throw new Error((json && json.error) || 'データ取得に失敗しました');
         }
 
-        // 追加・更新・削除などの操作は POST で送信
         const res = await fetch(gasApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action, ...payload })
         });
         const json = await res.json();
-        if (json && json.success) {
-          return json.data;
-        } else {
-          throw new Error((json && json.error) || 'API呼び出しに失敗しました');
-        }
+        if (json && json.success) return json.data;
+        throw new Error((json && json.error) || 'APIリクエストに失敗しました');
       }
 
-      // 3. モックモード（URL未設定時）
-      console.warn("モックモード動作中 (GAS URL未設定)");
-      return executeMockAction(action, payload);
+      throw new Error('GAS URLが設定されていません');
     }
 
-    // モック操作シミュレータ
-    function executeMockAction(action, payload) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          if (action === 'getInitialData') {
-            resolve({
-              tasks: [...state.tasks],
-              projects: [...state.projects],
-              doneTasks: [...state.doneTasks]
-            });
-          } else if (action === 'saveTask') {
-            const data = payload.taskData;
-            const proj = state.projects.find(p => p.id === data.projectId);
-            if (data.id) {
-              const idx = state.tasks.findIndex(t => t.id === data.id);
-              if (idx !== -1) {
-                state.tasks[idx] = { ...state.tasks[idx], ...data, projectName: proj ? proj.name : '' };
-              }
-            } else {
-              state.tasks.push({
-                ...data,
-                id: String(Date.now()),
-                status: false,
-                projectName: proj ? proj.name : ''
-              });
-            }
-            resolve({ tasks: [...state.tasks], projects: [...state.projects], doneTasks: [...state.doneTasks] });
-          } else if (action === 'completeTask' || action === 'toggleTaskStatus') {
-            const idx = state.tasks.findIndex(t => t.id === payload.taskId);
-            if (idx !== -1) {
-              const comp = { ...state.tasks[idx], status: true };
-              state.tasks.splice(idx, 1);
-              state.doneTasks.unshift(comp);
-            }
-            resolve({ tasks: [...state.tasks], projects: [...state.projects], doneTasks: [...state.doneTasks] });
-          } else if (action === 'deleteTask') {
-            state.tasks = state.tasks.filter(t => t.id !== payload.taskId);
-            resolve({ tasks: [...state.tasks], projects: [...state.projects], doneTasks: [...state.doneTasks] });
-          } else if (action === 'saveProject') {
-            const p = payload.projectData;
-            state.projects.push({
-              id: String(100 + state.projects.length + 1),
-              name: p.name,
-              type: p.type
-            });
-            resolve({ tasks: [...state.tasks], projects: [...state.projects], doneTasks: [...state.doneTasks] });
-          } else if (action === 'updateSortOrder') {
-            resolve({ tasks: [...state.tasks], projects: [...state.projects], doneTasks: [...state.doneTasks] });
-          }
-        }, 300);
-      });
-    }
-
-    // ----------------------------------
-    // 設定モーダル & 接続管理
-    // ----------------------------------
-    function openSettingsModal() {
-      document.getElementById('gas-api-url-input').value = gasApiUrl;
-      updateConnectionBadge();
-      document.getElementById('settings-modal').classList.add('active');
-    }
-
-    function closeSettingsModal() {
-      document.getElementById('settings-modal').classList.remove('active');
-    }
-
-    function updateConnectionBadge() {
-      const badge = document.getElementById('connection-status-badge');
-      if (!badge) return;
-      if (isGasEnvironment()) {
-        badge.innerHTML = `
-          <span class="status-badge-pill status-badge-connected">
-            <span class="material-symbols-outlined" style="font-size: 14px;">cloud_done</span>
-            <span>GAS直接連携中 (組み込み)</span>
-          </span>`;
-      } else if (gasApiUrl) {
-        badge.innerHTML = `
-          <span class="status-badge-pill status-badge-connected">
-            <span class="material-symbols-outlined" style="font-size: 14px;">cloud_done</span>
-            <span>Web API 接続設定済み</span>
-          </span>`;
-      } else {
-        badge.innerHTML = `
-          <span class="status-badge-pill status-badge-disconnected">
-            <span class="material-symbols-outlined" style="font-size: 14px;">cloud_off</span>
-            <span>未接続 (モックモード)</span>
-          </span>`;
-      }
-    }
-
-    function saveSettingsUrl() {
-      const input = document.getElementById('gas-api-url-input');
-      const val = input.value.trim();
-      gasApiUrl = val;
-      if (val) {
-        localStorage.setItem(GAS_URL_KEY, val);
-        showToast('API URLを保存しました');
-      } else {
-        localStorage.removeItem(GAS_URL_KEY);
-        showToast('API設定をクリアしました (モックモード)');
-      }
-      closeSettingsModal();
-      updateConnectionBadge();
-      fetchInitialData();
-    }
-
-    async function testConnection() {
-      const input = document.getElementById('gas-api-url-input');
-      const testUrl = input.value.trim();
-      if (!testUrl) {
-        alert('URLを入力してください');
-        return;
-      }
-      showSyncing(true);
+    // キャッシュ読み込み
+    function loadCachedData() {
       try {
-        const res = await fetch(testUrl + (testUrl.includes('?') ? '&' : '?') + 'action=ping');
-        const json = await res.json();
-        if (json && json.success) {
-          alert('✅ 接続に成功しました！\n' + (json.data && json.data.message ? json.data.message : 'OK'));
-        } else {
-          throw new Error((json && json.error) || 'エラーレスポンスを受信しました');
+        const cached = localStorage.getItem(CACHE_DATA_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.tasks) {
+            state.tasks = parsed.tasks || [];
+            state.projects = parsed.projects || [];
+            state.doneTasks = parsed.doneTasks || [];
+            state.contexts = parsed.contexts || [];
+            renderAll();
+          }
         }
-      } catch (err) {
-        alert('❌ 接続テスト失敗: ' + err.message + '\n\n※ GASのデプロイ設定で「アクセスできるユーザー: 全員」になっているかご確認ください。');
-      } finally {
-        showSyncing(false);
+      } catch (e) {
+        console.error('キャッシュ読込エラー:', e);
       }
     }
 
-    // ----------------------------------
-    // アプリ起動フロー (SWRキャッシュ)
-    // ----------------------------------
-    window.addEventListener('DOMContentLoaded', () => {
-      updateConnectionBadge();
-      
-      // 1. ローカルキャッシュの復元（即時描画・待ち時間ゼロ）
-      const cached = localStorage.getItem(CACHE_DATA_KEY);
-      let hasCache = false;
-      if (cached) {
-        try {
-          const cachedData = JSON.parse(cached);
-          // 初期のモックキャッシュが残っている場合は破棄して本番取得を優先
-          const isMockCache = cachedData.tasks && cachedData.tasks.some(t => t.id === "1" && t.task === "朝のスクワット・ストレッチ");
-          if (isMockCache) {
-            localStorage.removeItem(CACHE_DATA_KEY);
-          } else if (cachedData.tasks && cachedData.projects) {
-            state.tasks = cachedData.tasks;
-            state.projects = cachedData.projects;
-            state.doneTasks = cachedData.doneTasks || [];
-            hasCache = true;
-            initApp();
-          }
-        } catch (e) {
-          console.warn('キャッシュ復元失敗', e);
-        }
-      }
-      
-      if (!hasCache && !gasApiUrl && !isGasEnvironment()) {
-        // 初回かつURL未設定時のみモックデータで初期化
-        state.tasks = [...MOCK_DATA.tasks];
-        state.projects = [...MOCK_DATA.projects];
-        state.doneTasks = [...MOCK_DATA.doneTasks];
-        initApp();
-      }
-
-      // プロジェクト選択時に区分（Private/Biz）を自動連動
-      const taskProjSelect = document.getElementById('task-project-select');
-      if (taskProjSelect) {
-        taskProjSelect.addEventListener('change', (e) => {
-          const selectedId = e.target.value;
-          const proj = state.projects.find(p => String(p.id) === String(selectedId));
-          if (proj && proj.type) {
-            state.formTaskType = proj.type;
-            const btns = document.querySelectorAll('#task-type-segment .segment-btn');
-            btns.forEach(btn => {
-              btn.classList.remove('active');
-              if (btn.classList.contains(proj.type)) {
-                btn.classList.add('active');
-              }
-            });
-          }
-        });
-      }
-
-      // 2. サーバーから最新データを取得・同期
-      fetchInitialData(!hasCache);
-    });
-
-    async function fetchInitialData(shouldShowLoading = true) {
-      if (shouldShowLoading) showLoading(true);
-      else showSyncing(true);
-
+    // 初期データ取得
+    async function fetchInitialData() {
+      setSyncStatus('同期中...', true);
       try {
         const data = await callBackendApi('getInitialData');
-        if (data && data.tasks && data.projects) {
-          state.tasks = data.tasks;
-          state.projects = data.projects;
+        if (data) {
+          state.tasks = data.tasks || [];
+          state.projects = data.projects || [];
           state.doneTasks = data.doneTasks || [];
+          state.contexts = data.contexts || [];
           localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-          initApp();
+          renderAll();
+          setSyncStatus('同期完了', false);
         }
-      } catch (err) {
-        console.error('初期データ取得エラー:', err);
-        const cached = localStorage.getItem(CACHE_DATA_KEY);
-        // キャッシュデータが手元にない時のみエラーを表示
-        if (!cached) {
-          showToast('同期エラー: ' + err.message);
-        }
-      } finally {
-        showLoading(false);
-        showSyncing(false);
+      } catch (e) {
+        console.warn('初期取得失敗:', e);
+        setSyncStatus('オフライン/キャッシュ', false);
       }
     }
 
-    // 初期化
-    function initApp() {
-      renderTaskList();
-      renderProjectList();
-      renderHistoryList();
-      populateProjectSelect();
-      populateFilterProjectSelect();
-      populateContextSelect();
-      
-      // 日付フィルターの初期値に今日をセット
-      document.getElementById('task-date-filter-input').value = formatDateString(new Date());
-    }
-
-    // 表示用の日付フォーマット（今年と異なる年は「2027/1/1(金)」のように年を明記）
-    function formatDateDisplay(dateStr) {
-      if (!dateStr) return '';
-      const d = new Date(dateStr.replace(/-/g, "/"));
-      if (isNaN(d.getTime())) return dateStr;
-
-      const currentYear = new Date().getFullYear();
-      const taskYear = d.getFullYear();
-      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-
-      if (taskYear !== currentYear) {
-        return `${taskYear}/${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
-      } else {
-        return `${d.getMonth() + 1}/${d.getDate()}(${dayOfWeek})`;
-      }
-    }
-
-    // 優先度 (Context) バッジのCSSクラス判定
-    function getContextBadgeClass(contextName) {
-      if (!contextName) return '';
-      if (contextName.includes('最優先')) return 'priority-highest';
-      if (contextName.includes('優先')) return 'priority-high';
-      if (contextName.includes('隙間') || contextName.includes('すきま')) return 'priority-normal';
-      return 'priority-other';
-    }
-
-    // 優先度のソート順ランク付け（最優先が一番上）
-    function getPriorityRank(task) {
-      const desc = task.description || '';
-      if (desc.includes('最優先')) return 1;
-      if (desc.includes('優先')) return 2;
-      if (desc.includes('隙間') || desc.includes('すきま')) return 3;
-      if (desc.trim() !== '') return 4;
-      return 5;
-    }
-
-    // 同一期日内での並び順比較関数（時間が最優先、時間未入力の場合はコンテキスト優先）
-    function compareTasksByTimeAndPriority(a, b) {
-      const aTime = (a.startTime || '').trim();
-      const bTime = (b.startTime || '').trim();
-
-      // 1. 両方に開始時間がある場合：時間順（早い順）
-      if (aTime && bTime) {
-        const timeDiff = aTime.localeCompare(bTime);
-        if (timeDiff !== 0) return timeDiff;
-        // 開始時間が同一の場合はコンテキスト順
-        return getPriorityRank(a) - getPriorityRank(b);
-      }
-
-      // 2. 片方だけ時間がある場合：時間ありを優先（上）に配置
-      if (aTime && !bTime) return -1;
-      if (!aTime && bTime) return 1;
-
-      // 3. 両方とも時間がない場合：コンテキスト（最優先 > 優先 > 隙間時間）順
-      const rankDiff = getPriorityRank(a) - getPriorityRank(b);
-      if (rankDiff !== 0) return rankDiff;
-
-      return 0;
-    }
-
-    // 複数期日が含まれるリスト用の総合ソート（期日が早い順 ＞ 同一期日内は時間順 ＞ 優先度順）
-    function compareTasksByDateAndTime(a, b) {
-      // 期日なし同士、または同一期日の場合は時間・優先度順
-      if (!a.date && !b.date) return compareTasksByTimeAndPriority(a, b);
-      if (!a.date) return 1;  // 期日なしは末尾へ
-      if (!b.date) return -1;
-      
-      const dateDiff = a.date.localeCompare(b.date);
-      if (dateDiff !== 0) return dateDiff; // 期日が早い順（昇順）
-      
-      return compareTasksByTimeAndPriority(a, b);
-    }
-
-    // 優先度プルダウンの動的生成
-    function populateContextSelect() {
-      const select = document.getElementById('task-context-select');
-      if (!select) return;
-      const currentVal = select.value;
-      select.innerHTML = '';
-
-      // 基本の選択肢
-      const defaultOptions = [
-        { value: '', label: 'なし' },
-        { value: '最優先', label: '🔥 最優先' },
-        { value: '優先', label: '⭐ 優先' },
-        { value: '隙間時間', label: '☕ 隙間時間' }
-      ];
-
-      const addedValues = new Set();
-      defaultOptions.forEach(opt => {
-        const el = document.createElement('option');
-        el.value = opt.value;
-        el.innerText = opt.label;
-        select.appendChild(el);
-        if (opt.value) addedValues.add(opt.value);
-      });
-
-      // スプレッドシートのコンテキストシートから動的追加
-      if (state.contexts && Array.isArray(state.contexts)) {
-        state.contexts.forEach(c => {
-          const val = c.name || c.id;
-          if (val && !addedValues.has(val)) {
-            const el = document.createElement('option');
-            el.value = val;
-            el.innerText = `🏷️ ${val}`;
-            select.appendChild(el);
-            addedValues.add(val);
-          }
-        });
-      }
-
-      if (currentVal) {
-        select.value = currentVal;
+    function setSyncStatus(text, isSpinning) {
+      const syncEl = document.getElementById('sync-text');
+      const iconEl = document.querySelector('#sync-status .material-symbols-outlined');
+      if (syncEl) syncEl.innerText = text;
+      if (iconEl) {
+        iconEl.innerText = isSpinning ? 'sync' : 'cloud_done';
+        if (isSpinning) iconEl.style.animation = 'spin 1s linear infinite';
+        else iconEl.style.animation = 'none';
       }
     }
 
     // ----------------------------------
-    // ページ・フィルタ切り替え
+    // レンダリング全般
     // ----------------------------------
-    function switchPage(pageId, navElement) {
-      state.activePage = pageId;
-      
-      // サブページ表示切り替え
-      document.querySelectorAll('.sub-page').forEach(p => p.classList.remove('active'));
-      document.getElementById('page-' + pageId).classList.add('active');
-      
-      // ナビゲーションのactive切り替え
-      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-      navElement.classList.add('active');
-      
-      // FABの表示制御（タスク画面のときのみ表示）
-      const fab = document.getElementById('add-task-fab');
-      if (pageId === 'tasks') {
-        fab.style.display = 'flex';
-      } else {
-        fab.style.display = 'none';
+    function renderAll() {
+      renderSidebarFolders();
+      renderBreadcrumb();
+      renderTaskTable();
+      populateProjectSelects();
+    }
+
+    // サブサイドバーのフォルダ一覧
+    function renderSidebarFolders() {
+      const list = document.getElementById('folder-list');
+      if (!list) return;
+      list.innerHTML = '';
+
+      // 1. All Tasks
+      const allCount = state.tasks.filter(t => !t.status).length;
+      list.appendChild(createFolderItem('All', 'All Tasks', allCount, 'inbox'));
+
+      // 2. 000_inbox (存在すれば優先表示)
+      const inboxProj = state.projects.find(p => p.name.includes('inbox') || p.name.includes('インボックス'));
+      if (inboxProj) {
+        const inboxCount = state.tasks.filter(t => !t.status && t.projectName === inboxProj.name).length;
+        list.appendChild(createFolderItem(inboxProj.name, inboxProj.name, inboxCount, 'mail'));
       }
-    }
 
-    function setFilterType(type) {
-      state.filterType = type;
-      
-      // 区分フィルタータブのactive切り替え
-      const tabs = document.querySelectorAll('.filter-tabs:first-of-type .filter-tab');
-      tabs.forEach(tab => {
-        tab.classList.remove('active');
-        if (tab.innerText === (type === 'All' ? 'すべて' : type)) {
-          tab.classList.add('active');
-        }
-      });
-      
-      renderTaskList();
-    }
-
-    function setViewMode(mode) {
-      state.viewMode = mode;
-      
-      // 表示モードタブのactive切り替え
-      document.getElementById('mode-tab-group').classList.remove('active');
-      document.getElementById('mode-tab-date').classList.remove('active');
-      document.getElementById('mode-tab-project').classList.remove('active');
-      
-      if (mode === 'group') document.getElementById('mode-tab-group').classList.add('active');
-      if (mode === 'date') document.getElementById('mode-tab-date').classList.add('active');
-      if (mode === 'project') document.getElementById('mode-tab-project').classList.add('active');
-      
-      // コントロールの表示切り替え
-      document.getElementById('date-filter-container').style.display = mode === 'date' ? 'block' : 'none';
-      document.getElementById('project-filter-container').style.display = mode === 'project' ? 'block' : 'none';
-      
-      renderTaskList();
-    }
-
-    function populateFilterProjectSelect() {
-      const select = document.getElementById('task-project-filter-select');
-      if (!select) return;
-      select.innerHTML = '';
-      
-      const defOpt = document.createElement('option');
-      defOpt.value = '';
-      defOpt.innerText = 'プロジェクトを選択してください...';
-      select.appendChild(defOpt);
-      
+      // 3. 各プロジェクト一覧
       state.projects.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.innerText = `${p.name} (${p.type === 'Biz' ? 'Biz' : 'Private'})`;
-        select.appendChild(opt);
+        if (inboxProj && p.name === inboxProj.name) return;
+        const count = state.tasks.filter(t => !t.status && (t.projectName === p.name || t.projectId === p.id)).length;
+        list.appendChild(createFolderItem(p.name, p.name, count, 'folder'));
       });
+
+      // 4. No Folder (未分類)
+      const noFolderCount = state.tasks.filter(t => !t.status && !t.projectName && !t.projectId).length;
+      list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off'));
     }
 
-    // ----------------------------------
-    // レンダー処理
-    // ----------------------------------
-    
-    // タスクリストのレンダリング
-    function renderTaskList() {
-      const container = document.getElementById('task-list-container');
-      container.innerHTML = '';
+    function createFolderItem(folderKey, label, count, iconName) {
+      const li = document.createElement('li');
+      li.className = 'folder-item' + (state.selectedFolder === folderKey ? ' active' : '');
+      li.onclick = () => selectFolder(folderKey);
 
-      // フィルタリング
-      let filtered = state.tasks;
-      if (state.filterType !== 'All') {
-        filtered = state.tasks.filter(t => t.type === state.filterType);
-      }
+      li.innerHTML = `
+        <div class="folder-item-left">
+          <span class="material-symbols-outlined icon">${iconName}</span>
+          <span title="${label}">${label}</span>
+        </div>
+        <span class="folder-badge">${count}</span>
+      `;
+      return li;
+    }
 
-      if (state.viewMode === 'group') {
-        renderGroupedTaskList(filtered, container);
-      } else if (state.viewMode === 'date') {
-        renderDateTaskList(filtered, container);
-      } else if (state.viewMode === 'project') {
-        renderProjectTaskList(filtered, container);
+    function selectFolder(folderKey) {
+      state.selectedFolder = folderKey;
+      state.selectedDate = null;
+      state.showCompleted = false;
+      renderAll();
+    }
+
+    function renderBreadcrumb() {
+      const currentFolderEl = document.getElementById('breadcrumb-current-folder');
+      const modeEl = document.getElementById('breadcrumb-mode');
+      if (modeEl) modeEl.innerText = state.railMode === 'calendar' ? 'Calendar' : 'Folders';
+      if (currentFolderEl) {
+        if (state.showCompleted) {
+          currentFolderEl.innerText = 'Completed Tasks';
+        } else if (state.selectedDate) {
+          currentFolderEl.innerText = `Date: ${state.selectedDate}`;
+        } else {
+          currentFolderEl.innerText = state.selectedFolder;
+        }
       }
     }
 
-    // 期日順グループ表示
-    function renderGroupedTaskList(filtered, container) {
-      if (filtered.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">playlist_add</span>
-            <p>タスクはありません。右下の＋ボタンから追加してください。</p>
-          </div>
+    // タスクテーブル描画
+    function renderTaskTable() {
+      const tbody = document.getElementById('task-table-body');
+      const footerStats = document.getElementById('footer-stats');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      let taskList = state.showCompleted ? [...state.doneTasks] : [...state.tasks];
+
+      // フォルダによるフィルタ
+      if (state.selectedFolder !== 'All') {
+        if (state.selectedFolder === 'No Folder') {
+          taskList = taskList.filter(t => !t.projectName && !t.projectId);
+        } else {
+          taskList = taskList.filter(t => t.projectName === state.selectedFolder || t.projectId === state.selectedFolder);
+        }
+      }
+
+      // 日付によるフィルタ
+      if (state.selectedDate) {
+        taskList = taskList.filter(t => t.date === state.selectedDate);
+      }
+
+      // 検索クエリ
+      if (state.searchQuery) {
+        const q = state.searchQuery.toLowerCase();
+        taskList = taskList.filter(t => 
+          (t.task && t.task.toLowerCase().includes(q)) || 
+          (t.projectName && t.projectName.toLowerCase().includes(q)) ||
+          (t.description && t.description.toLowerCase().includes(q))
+        );
+      }
+
+      // 統計更新
+      const activeCount = state.tasks.filter(t => !t.status).length;
+      const completedCount = state.doneTasks.length;
+      if (footerStats) {
+        footerStats.innerText = `Displayed Tasks: ${taskList.length} active (Total: ${activeCount} active, ${completedCount} completed)`;
+      }
+
+      if (taskList.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" style="text-align: center; padding: 40px; color: #94a3b8;">
+              <span class="material-symbols-outlined" style="font-size: 32px; vertical-align: middle;">checklist</span>
+              <div style="margin-top: 8px;">タスクはありません。上部の Quick Add Task から追加できます。</div>
+            </td>
+          </tr>
         `;
         return;
       }
 
-      // 期日ベースでグループ分け
-      // グループ定義: 期限切れ, 今日, 明日, 明後日, 3日後, 4日後, 5日後, それ以降, 期日なし
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-
-      const dayNames = ['今日', '明日', '明後日', '3日後', '4日後', '5日後'];
-      const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
-
+      // 期日ベースのグループ分け（Due in the past, Today, Tomorrow, Upcoming, No Date）
+      const todayStr = getTodayString();
       const groups = {
-        overdue: { title: '期限切れ', icon: 'warning', list: [], class: 'overdue' }
+        past: { label: 'Due in the past', list: [] },
+        today: { label: 'Today', list: [] },
+        tomorrow: { label: 'Tomorrow', list: [] },
+        upcoming: { label: 'Upcoming', list: [] },
+        nodate: { label: 'No Due Date', list: [] }
       };
 
-      const dateToGroupKey = {};
-      for (let i = 0; i <= 5; i++) {
-        const d = new Date(now.getTime());
-        d.setDate(d.getDate() + i);
-        const dStr = formatDateString(d);
-        const label = `${dayNames[i]} (${d.getMonth() + 1}/${d.getDate()}・${weekDays[d.getDay()]})`;
-        const key = `day_${i}`;
-
-        groups[key] = {
-          title: label,
-          icon: i === 0 ? 'today' : (i === 1 ? 'event' : 'calendar_today'),
-          list: [],
-          class: i === 0 ? 'today' : 'upcoming'
-        };
-        dateToGroupKey[dStr] = key;
-      }
-
-      groups.later = { title: 'それ以降（6日後〜）', icon: 'calendar_month', list: [], class: 'upcoming' };
-      groups.nodate = { title: '期日なし', icon: 'question_mark', list: [], class: 'nodate' };
-
-      const todayStr = formatDateString(now);
-
-      filtered.forEach(task => {
-        if (!task.date) {
-          groups.nodate.list.push(task);
+      taskList.forEach(t => {
+        if (!t.date) {
+          groups.nodate.list.push(t);
+        } else if (t.date < todayStr) {
+          groups.past.list.push(t);
+        } else if (t.date === todayStr) {
+          groups.today.list.push(t);
         } else {
-          const taskDateStr = task.date; // yyyy-MM-dd
-          if (taskDateStr < todayStr) {
-            groups.overdue.list.push(task);
-          } else if (dateToGroupKey[taskDateStr]) {
-            groups[dateToGroupKey[taskDateStr]].list.push(task);
-          } else {
-            groups.later.list.push(task);
-          }
+          // 明日判定
+          const tmrw = getOffsetDateString(1);
+          if (t.date === tmrw) groups.tomorrow.list.push(t);
+          else groups.upcoming.list.push(t);
         }
       });
 
       // 各グループの描画
-      Object.keys(groups).forEach(key => {
-        const group = groups[key];
-        if (group.list.length > 0) {
-          // グループ内を「期日順 ＞ 同一期日内は時間優先・コンテキスト優先」にソート
-          group.list.sort(compareTasksByDateAndTime);
-
-          // グループヘッダー
-          const header = document.createElement('div');
-          header.className = `task-section-header ${group.class}`;
-          header.innerHTML = `
-            <span class="material-symbols-outlined">${group.icon}</span>
-            <span>${group.title} (${group.list.length})</span>
+      Object.keys(groups).forEach(gk => {
+        const grp = groups[gk];
+        if (grp.list.length > 0) {
+          // グループヘッダー行
+          const groupTr = document.createElement('tr');
+          groupTr.className = 'table-group-row';
+          groupTr.innerHTML = `
+            <td colspan="10">
+              <div class="group-header-content">
+                <span class="material-symbols-outlined" style="font-size: 15px;">calendar_today</span>
+                <span>${grp.label} (${grp.list.length})</span>
+              </div>
+            </td>
           `;
-          container.appendChild(header);
+          tbody.appendChild(groupTr);
 
-          // リスト
-          const listContainer = document.createElement('div');
-          listContainer.className = 'task-list';
-
-          group.list.forEach(task => {
-            const card = createTaskCard(task, key);
-            listContainer.appendChild(card);
+          // タスク行の追加
+          grp.list.sort(compareTasksByDateAndTime);
+          grp.list.forEach(task => {
+            tbody.appendChild(createTaskTableRow(task));
           });
-
-          container.appendChild(listContainer);
         }
       });
     }
 
-    // 日付指定表示
-    function renderDateTaskList(filtered, container) {
-      const dateVal = document.getElementById('task-date-filter-input').value;
-      if (!dateVal) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">calendar_today</span>
-            <p>日付を選択してください。</p>
-          </div>
-        `;
-        return;
+    // タスク行の作成（インライン編集対応）
+    function createTaskTableRow(task) {
+      const tr = document.createElement('tr');
+      tr.className = 'task-row' + (task.status ? ' completed' : '');
+      tr.id = `task-row-${task.id}`;
+
+      // 期日表示
+      let dueClass = 'nodate';
+      let dueText = 'none';
+      if (task.date) {
+        const todayStr = getTodayString();
+        if (task.date < todayStr) dueClass = 'overdue';
+        else if (task.date === todayStr) dueClass = 'today';
+        else dueClass = 'future';
+        dueText = formatShortDate(task.date);
       }
 
-      const dateTasks = filtered.filter(t => t.date === dateVal);
-      // 時間優先、時間未入力の場合はコンテキスト優先でソート
-      dateTasks.sort(compareTasksByTimeAndPriority);
-      
-      const d = new Date(dateVal.replace(/-/g, "/"));
-      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
-      const dateDisplay = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${dayOfWeek})`;
+      // スター判定（最優先ならアクティブ）
+      const isStarred = (task.description || '').includes('最優先') || (task.description || '').includes('★');
 
-      // セクションヘッダー
-      const header = document.createElement('div');
-      header.className = 'task-section-header today';
-      header.innerHTML = `
-        <span class="material-symbols-outlined">calendar_today</span>
-        <span>${dateDisplay} のタスク (${dateTasks.length})</span>
+      tr.innerHTML = `
+        <td class="col-check">
+          <input type="checkbox" class="task-checkbox" ${task.status ? 'checked' : ''} onchange="handleToggleStatus('${task.id}')">
+        </td>
+        <td class="col-star">
+          <button class="task-star-btn ${isStarred ? 'active' : ''}" onclick="toggleStar('${task.id}')" title="スター切替">
+            <span class="material-symbols-outlined" style="font-size: 16px;">${isStarred ? 'star' : 'star_border'}</span>
+          </button>
+        </td>
+        <td class="col-folder" id="task-folder-${task.id}">
+          <span class="task-folder-cell editable-cell" onclick="startInlineEditFolder(event, '${task.id}')" title="クリックしてフォルダ変更">
+            <span class="material-symbols-outlined" style="font-size: 14px;">folder</span>
+            <span>${escapeHtml(task.projectName || 'No Folder')}</span>
+          </span>
+        </td>
+        <td class="col-task" id="task-title-${task.id}">
+          <span class="task-title-cell editable-cell" onclick="startInlineEditTask(event, '${task.id}')" title="クリックしてタスク名を編集">
+            ${escapeHtml(task.task)}
+          </span>
+        </td>
+        <td class="col-due" id="task-due-${task.id}">
+          <span class="task-due-cell ${dueClass} editable-cell" onclick="startInlineEditDue(event, '${task.id}')" title="クリックして期日を変更">
+            ${dueText}
+          </span>
+        </td>
+        <td class="col-priority" id="task-priority-${task.id}">
+          <span class="task-priority-cell ${getPriorityClass(task)} editable-cell" onclick="startInlineEditPriority(event, '${task.id}')" title="クリックして優先度を変更">
+            ${getPriorityLabel(task)}
+          </span>
+        </td>
+        <td class="col-context">
+          <span style="color: #64748b; font-size: 11.5px;">${escapeHtml(task.description || '')}</span>
+        </td>
+        <td class="col-time" id="task-time-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を変更" style="color: #64748b; font-size: 11.5px;">
+            ${task.startTime ? task.startTime : '--:--'}
+          </span>
+        </td>
+        <td class="col-repeat">
+          <span style="color: #94a3b8; font-size: 11px;">${task.repeat || 'None'}</span>
+        </td>
+        <td class="col-actions">
+          <button class="row-action-btn" onclick="openEditModal('${task.id}')" title="全項目をモーダルで編集">
+            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+          </button>
+        </td>
       `;
-      container.appendChild(header);
-
-      if (dateTasks.length === 0) {
-        container.innerHTML += `
-          <div class="empty-state" style="padding: 20px;">
-            <span class="material-symbols-outlined" style="font-size: 32px;">info</span>
-            <p>この日のタスクはありません。</p>
-          </div>
-        `;
-        return;
-      }
-
-      const listContainer = document.createElement('div');
-      listContainer.className = 'task-list';
-
-      dateTasks.forEach(task => {
-        const card = createTaskCard(task, 'today');
-        listContainer.appendChild(card);
-      });
-
-      container.appendChild(listContainer);
+      return tr;
     }
 
-    // プロジェクト別表示
-    function renderProjectTaskList(filtered, container) {
-      const projectId = document.getElementById('task-project-filter-select').value;
-      if (!projectId) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">folder_open</span>
-            <p>プロジェクトを選択してください。</p>
-          </div>
-        `;
-        return;
-      }
+    // ----------------------------------
+    // インライン直接編集ハンドラー
+    // ----------------------------------
 
-      const project = state.projects.find(p => p.id === projectId);
-      const projName = project ? project.name : '不明なプロジェクト';
-      const projTasks = filtered.filter(t => t.projectId === projectId);
+    // 1. タスク名のインライン編集
+    function startInlineEditTask(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-title-${taskId}`);
+      if (!cell || cell.querySelector('input')) return;
 
-      // 期日順にソート（期日がないタスクは最後に、同一期日内は時間優先・コンテキスト優先）
-      projTasks.sort(compareTasksByDateAndTime);
+      const currentText = cell.innerText.trim();
+      cell.innerHTML = `<input type="text" class="inline-edit-input" id="input-task-${taskId}" value="${escapeHtml(currentText)}">`;
+      const input = document.getElementById(`input-task-${taskId}`);
+      input.focus();
+      input.select();
 
-      // セクションヘッダー
-      const header = document.createElement('div');
-      header.className = `task-section-header ${project && project.type === 'Biz' ? 'upcoming' : 'nodate'}`;
-      header.innerHTML = `
-        <span class="material-symbols-outlined">folder</span>
-        <span>${projName} のタスク (${projTasks.length})</span>
-      `;
-      container.appendChild(header);
-
-      if (projTasks.length === 0) {
-        container.innerHTML += `
-          <div class="empty-state" style="padding: 20px;">
-            <span class="material-symbols-outlined" style="font-size: 32px;">info</span>
-            <p>このプロジェクトに紐づくタスクはありません。</p>
-          </div>
-        `;
-        return;
-      }
-
-      const listContainer = document.createElement('div');
-      listContainer.className = 'task-list';
-
-      projTasks.forEach(task => {
-        let groupKey = 'upcoming';
-        const nowStr = formatDateString(new Date());
-        if (task.date && task.date < nowStr) {
-          groupKey = 'overdue';
-        } else if (task.date && task.date === nowStr) {
-          groupKey = 'today';
-        } else if (!task.date) {
-          groupKey = 'nodate';
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        const newVal = input.value.trim();
+        if (save && newVal && newVal !== currentText) {
+          updateTaskInline(taskId, { task: newVal });
+        } else {
+          renderTaskTable();
         }
-        
-        const card = createTaskCard(task, groupKey);
-        listContainer.appendChild(card);
-      });
+      };
 
-      container.appendChild(listContainer);
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') finish(true);
+        else if (ev.key === 'Escape') finish(false);
+      };
+      input.onblur = () => finish(true);
     }
 
-    // タスクカードのDOM作成
-    function createTaskCard(task, groupKey) {
-      const card = document.createElement('div');
-      card.className = `task-card ${task.type} ${groupKey === 'overdue' ? 'overdue' : ''} ${(groupKey === 'today' || groupKey === 'day_0') ? 'today' : ''}`;
-      card.id = `task-card-${task.id}`;
-      card.setAttribute('data-id', task.id);
-      
-      // プロジェクト名
-      const projName = task.projectName || state.projects.find(p => p.id === task.projectId)?.name || '未分類';
-      
-      // 期日の曜日付き日本語フォーマット（年を考慮）
-      const dateDisplay = formatDateDisplay(task.date);
+    // 2. 期日のインライン編集
+    function startInlineEditDue(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-due-${taskId}`);
+      if (!cell || cell.querySelector('input')) return;
 
-      // 時間帯の表示
-      let timeDisplay = '';
-      if (task.startTime) {
-        timeDisplay = task.startTime;
-        if (task.endTime) {
-          timeDisplay += ` 〜 ${task.endTime}`;
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const currentVal = task.date || '';
+      cell.innerHTML = `<input type="date" class="inline-edit-date" id="input-due-${taskId}" value="${currentVal}">`;
+      const input = document.getElementById(`input-due-${taskId}`);
+      input.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        const newVal = input.value;
+        if (save && newVal !== currentVal) {
+          updateTaskInline(taskId, { date: newVal });
+        } else {
+          renderTaskTable();
         }
-      }
+      };
 
-      card.innerHTML = `
-        <button class="complete-btn" onclick="completeTask(event, '${task.id}')">
-          <span class="material-symbols-outlined">done</span>
-        </button>
-        <div class="task-info" onclick="openEditModal('${task.id}')">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-            <div class="task-title">${escapeHtml(task.task)}</div>
-            ${task.description ? `
-              <span class="context-badge ${getContextBadgeClass(task.description)}">
-                ${escapeHtml(task.description)}
-              </span>
-            ` : ''}
-          </div>
-          <div class="task-meta">
-            <span class="project-badge">#${escapeHtml(projName.replace(/^#/, ''))}</span>
-            ${task.date ? `
-              <span class="date-badge">
-                <span class="material-symbols-outlined" style="font-size:13px;">calendar_today</span>
-                ${dateDisplay}
-              </span>
-            ` : ''}
-            ${timeDisplay ? `
-              <span class="time-badge">
-                <span class="material-symbols-outlined" style="font-size:13px;">schedule</span>
-                ${timeDisplay}
-              </span>
-            ` : ''}
-            ${task.repeat && task.repeat !== 'None' ? `
-              <span class="repeat-badge">
-                <span class="material-symbols-outlined" style="font-size:13px;">sync</span>
-                ${task.repeat}
-              </span>
-            ` : ''}
-          </div>
-        </div>
-      `;
-
-      return card;
+      input.onchange = () => finish(true);
+      input.onblur = () => finish(true);
+      input.onkeydown = (ev) => {
+        if (ev.key === 'Enter') finish(true);
+        else if (ev.key === 'Escape') finish(false);
+      };
     }
 
-    // プロジェクトリストのレンダリング
-    function renderProjectList() {
-      const container = document.getElementById('project-list-container');
-      container.innerHTML = '';
-      
-      if (state.projects.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-sub);">プロジェクトが登録されていません。</div>';
-        return;
-      }
+    // 3. フォルダ（プロジェクト）のインライン編集
+    function startInlineEditFolder(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-folder-${taskId}`);
+      if (!cell || cell.querySelector('select')) return;
 
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      let selectHtml = `<select class="inline-edit-select" id="input-folder-${taskId}">`;
+      selectHtml += `<option value="">(No Folder)</option>`;
       state.projects.forEach(p => {
-        const card = document.createElement('div');
-        card.className = `project-card ${p.type}`;
-        card.innerText = p.name;
-        container.appendChild(card);
+        const isSel = (p.id === task.projectId || p.name === task.projectName);
+        selectHtml += `<option value="${p.id}" ${isSel ? 'selected' : ''}>${escapeHtml(p.name)}</option>`;
       });
+      selectHtml += `</select>`;
+
+      cell.innerHTML = selectHtml;
+      const select = document.getElementById(`input-folder-${taskId}`);
+      select.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        if (save) {
+          const chosenProj = state.projects.find(p => p.id === select.value);
+          const updates = {
+            projectId: chosenProj ? chosenProj.id : '',
+            projectName: chosenProj ? chosenProj.name : '',
+            type: chosenProj ? chosenProj.type : task.type
+          };
+          updateTaskInline(taskId, updates);
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      select.onchange = () => finish(true);
+      select.onblur = () => finish(false);
     }
 
-    // 完了履歴リストのレンダリング
-    function renderHistoryList() {
-      const container = document.getElementById('history-list-container');
-      container.innerHTML = '';
+    // 4. 優先度のインライン編集
+    function startInlineEditPriority(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-priority-${taskId}`);
+      if (!cell || cell.querySelector('select')) return;
 
-      if (state.doneTasks.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-symbols-outlined">history</span>
-            <p>完了履歴はありません。</p>
-          </div>
-        `;
-        return;
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const desc = task.description || '';
+      let currentPri = '0';
+      if (desc.includes('最優先')) currentPri = '3';
+      else if (desc.includes('優先')) currentPri = '2';
+      else if (desc.includes('隙間')) currentPri = '1';
+
+      cell.innerHTML = `
+        <select class="inline-edit-select" id="input-pri-${taskId}">
+          <option value="3" ${currentPri === '3' ? 'selected' : ''}>3 Top</option>
+          <option value="2" ${currentPri === '2' ? 'selected' : ''}>2 High</option>
+          <option value="1" ${currentPri === '1' ? 'selected' : ''}>1 Medium</option>
+          <option value="0" ${currentPri === '0' ? 'selected' : ''}>0 Low</option>
+        </select>
+      `;
+      const select = document.getElementById(`input-pri-${taskId}`);
+      select.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        if (save) {
+          let newDesc = desc.replace(/最優先|優先|隙間時間/g, '').trim();
+          if (select.value === '3') newDesc = ('最優先 ' + newDesc).trim();
+          else if (select.value === '2') newDesc = ('優先 ' + newDesc).trim();
+          else if (select.value === '1') newDesc = ('隙間時間 ' + newDesc).trim();
+          updateTaskInline(taskId, { description: newDesc });
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      select.onchange = () => finish(true);
+      select.onblur = () => finish(false);
+    }
+
+    // 5. 開始時間のインライン編集
+    function startInlineEditTime(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-time-${taskId}`);
+      if (!cell || cell.querySelector('input')) return;
+
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-time-${taskId}" value="${task.startTime || ''}">`;
+      const input = document.getElementById(`input-time-${taskId}`);
+      input.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        const newVal = input.value;
+        if (save && newVal !== task.startTime) {
+          updateTaskInline(taskId, { startTime: newVal });
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      input.onchange = () => finish(true);
+      input.onblur = () => finish(true);
+    }
+
+    // 共通インライン更新関数
+    async function updateTaskInline(taskId, updates) {
+      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      Object.assign(task, updates);
+      renderAll();
+      showToast('保存しました');
+
+      try {
+        setSyncStatus('保存中...', true);
+        await callBackendApi('saveTask', { taskData: task });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('インライン保存エラー:', e);
+        showToast('保存に失敗しました');
+        setSyncStatus('エラー', false);
       }
-
-      state.doneTasks.forEach(task => {
-        const card = document.createElement('div');
-        card.className = 'done-task-card';
-        
-        let dateDisplay = formatDateDisplay(task.date);
-        
-        card.innerHTML = `
-          <div class="done-task-header">
-            <span>#${escapeHtml(task.projectName.replace(/^#/, ''))} (${task.type})</span>
-            <span>${dateDisplay} ${task.startTime || ''}</span>
-          </div>
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-            <div class="done-task-title">${escapeHtml(task.task)}</div>
-            ${task.description ? `
-              <span class="context-badge ${getContextBadgeClass(task.description)}">
-                ${escapeHtml(task.description)}
-              </span>
-            ` : ''}
-          </div>
-        `;
-        container.appendChild(card);
-      });
     }
 
     // ----------------------------------
-    // データフォーム操作（モーダル）
+    // Quick Add Task 処理
     // ----------------------------------
-    
-    // プロジェクト選択のプルダウンを構築
-    function populateProjectSelect() {
-      const select = document.getElementById('task-project-select');
-      select.innerHTML = '';
-      
-      // 表示中のセグメントタイプ（Private または Biz）に一致するプロジェクトを表示
-      const currentType = String(state.formTaskType || '').toLowerCase();
-      let filteredProj = state.projects.filter(p => String(p.type || '').toLowerCase() === currentType);
-      
-      // もし該当区分のプロジェクトが空の場合は全プロジェクトを候補にする
-      if (filteredProj.length === 0) {
-        filteredProj = state.projects;
+    async function handleQuickAdd() {
+      const input = document.getElementById('quick-add-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      // プロジェクト判定（現在選択中のフォルダ）
+      let projName = state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder' ? state.selectedFolder : '';
+      let projObj = state.projects.find(p => p.name === projName);
+      let projId = projObj ? projObj.id : '';
+
+      // 期日（カレンダーで日付が選ばれていればその日付、そうでなければ今日）
+      let dueDate = state.selectedDate || getTodayString();
+
+      const newTask = {
+        id: 'tmp_' + Date.now(),
+        task: text,
+        projectName: projName,
+        projectId: projId,
+        date: dueDate,
+        startTime: '',
+        endTime: '',
+        repeat: 'None',
+        description: '',
+        type: projObj ? projObj.type : 'Biz',
+        status: false
+      };
+
+      // 楽観的UI更新
+      state.tasks.unshift(newTask);
+      input.value = '';
+      renderAll();
+      showToast('タスクを追加しました');
+
+      // バックエンド通信
+      try {
+        setSyncStatus('保存中...', true);
+        const res = await callBackendApi('saveTask', { taskData: newTask });
+        if (res && res.id) {
+          newTask.id = res.id;
+        }
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('タスク追加エラー:', e);
+        showToast('保存に失敗しました');
+        setSyncStatus('エラー', false);
       }
-      
-      filteredProj.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p.id;
-        opt.innerText = p.name;
-        select.appendChild(opt);
-      });
     }
 
+    // 完了ステータス切り替え
+    async function handleToggleStatus(taskId) {
+      const taskIndex = state.tasks.findIndex(t => t.id === taskId);
+      if (taskIndex === -1) return;
+
+      const task = state.tasks[taskIndex];
+      task.status = true;
+
+      // 楽観的更新
+      state.tasks.splice(taskIndex, 1);
+      state.doneTasks.unshift(task);
+      renderAll();
+      showToast('タスクを完了にしました ✅');
+
+      try {
+        setSyncStatus('更新中...', true);
+        await callBackendApi('completeTask', { taskId });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('完了エラー:', e);
+        showToast('更新に失敗しました');
+      }
+    }
+
+    // スターのトグル（最優先フラグ）
+    async function toggleStar(taskId) {
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const isStarred = (task.description || '').includes('最優先');
+      if (isStarred) {
+        task.description = task.description.replace('最優先', '').trim();
+      } else {
+        task.description = ('最優先 ' + (task.description || '')).trim();
+      }
+
+      renderTaskTable();
+
+      try {
+        await callBackendApi('saveTask', { taskData: task });
+      } catch (e) {
+        console.error('スター更新エラー:', e);
+      }
+    }
+
+    // ----------------------------------
+    // モーダル操作
+    // ----------------------------------
     function openAddModal() {
-      document.getElementById('modal-title').innerText = 'タスクを作成';
+      document.getElementById('modal-title').innerText = '新規タスクを作成';
       document.getElementById('task-id-input').value = '';
-      
-      // 連続登録用のチェックボックスを表示
-      document.getElementById('keep-open-group').style.display = 'flex';
-      
-      // 初期値リセット
-      setFormTaskType('Private'); // 初期はPrivate
       document.getElementById('task-title-input').value = '';
-      
-      // 期日に「今日」をデフォルトセット
-      const today = new Date();
-      document.getElementById('task-date-input').value = formatDateString(today);
-      
+      document.getElementById('task-date-input').value = state.selectedDate || getTodayString();
       document.getElementById('task-start-input').value = '';
       document.getElementById('task-end-input').value = '';
       document.getElementById('task-repeat-select').value = 'None';
-      populateContextSelect();
       document.getElementById('task-context-select').value = '';
-      
-      // おもてなし機能：プロジェクト別フィルターで選択されているプロジェクトがあれば、そのプロジェクトと区分を初期値に自動割り当て
-      if (state.viewMode === 'project') {
-        const filterProjSelect = document.getElementById('task-project-filter-select');
-        if (filterProjSelect && filterProjSelect.value) {
-          const project = state.projects.find(p => p.id === filterProjSelect.value);
-          if (project) {
-            setFormTaskType(project.type);
-            document.getElementById('task-project-select').value = project.id;
-          }
-        }
+
+      // プロジェクト初期値
+      const projSelect = document.getElementById('task-project-select');
+      if (state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder') {
+        const found = state.projects.find(p => p.name === state.selectedFolder);
+        if (found) projSelect.value = found.id;
       }
 
-      document.getElementById('save-btn-text').innerText = '追加';
-      
-      // 削除ボタンがあれば削除する (新規作成時には不要)
-      const footer = document.querySelector('.modal-footer');
-      const deleteBtn = document.getElementById('modal-delete-btn');
-      if (deleteBtn) deleteBtn.remove();
-
       document.getElementById('task-modal').classList.add('active');
-      
-      // モーダル表示後にタスク名入力欄にフォーカスを合わせる
-      setTimeout(() => {
-        document.getElementById('task-title-input').focus();
-      }, 100);
+      document.getElementById('task-title-input').focus();
     }
 
     function openEditModal(taskId) {
-      const task = state.tasks.find(t => t.id === taskId);
+      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
       if (!task) return;
 
       document.getElementById('modal-title').innerText = 'タスクを編集';
       document.getElementById('task-id-input').value = task.id;
-      
-      // 編集時は連続登録チェックボックスを非表示にする
-      document.getElementById('keep-open-group').style.display = 'none';
+      document.getElementById('task-title-input').value = task.task || '';
+      document.getElementById('task-date-input').value = task.date || '';
+      document.getElementById('task-start-input').value = task.startTime || '';
+      document.getElementById('task-end-input').value = task.endTime || '';
+      document.getElementById('task-repeat-select').value = task.repeat || 'None';
+      document.getElementById('task-type-select').value = task.type || 'Biz';
 
-      // 1. プロジェクトを特定（IDまたはプロジェクト名でマッチ）
-      let matchedProj = state.projects.find(p => String(p.id) === String(task.projectId));
-      if (!matchedProj && task.projectName) {
-        matchedProj = state.projects.find(p => p.name === task.projectName);
-      }
-
-      const initialType = (matchedProj && matchedProj.type) ? matchedProj.type : (task.type || 'Private');
-      setFormTaskType(initialType);
-
+      populateProjectSelects();
       const projSelect = document.getElementById('task-project-select');
-      if (matchedProj) {
-        projSelect.value = matchedProj.id;
-      } else if (task.projectId) {
-        projSelect.value = task.projectId;
-      }
-      document.getElementById('task-title-input').value = task.task;
-      document.getElementById('task-date-input').value = task.date;
-      document.getElementById('task-start-input').value = task.startTime;
-      document.getElementById('task-end-input').value = task.endTime;
-      document.getElementById('task-repeat-select').value = task.repeat;
-      
-      // 優先度 (Context) の選択
-      populateContextSelect();
-      const ctxSelect = document.getElementById('task-context-select');
-      if (task.description) {
-        const exists = Array.from(ctxSelect.options).some(o => o.value === task.description);
-        if (!exists) {
-          const opt = document.createElement('option');
-          opt.value = task.description;
-          opt.innerText = `🏷️ ${task.description}`;
-          ctxSelect.appendChild(opt);
-        }
-        ctxSelect.value = task.description;
-      } else {
-        ctxSelect.value = '';
-      }
-      
-      document.getElementById('save-btn-text').innerText = '保存';
-      
-      // すでに削除ボタンが存在するかチェック
-      const footer = document.querySelector('.modal-footer');
-      let deleteBtn = document.getElementById('modal-delete-btn');
-      if (!deleteBtn) {
-        deleteBtn = document.createElement('button');
-        deleteBtn.id = 'modal-delete-btn';
-        deleteBtn.className = 'btn btn-danger';
-        deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete</span>';
-        deleteBtn.onclick = () => deleteTask(task.id);
-        footer.insertBefore(deleteBtn, footer.firstChild);
+      if (task.projectId) projSelect.value = task.projectId;
+      else {
+        const p = state.projects.find(pr => pr.name === task.projectName);
+        if (p) projSelect.value = p.id;
       }
 
+      document.getElementById('task-context-select').value = task.description || '';
       document.getElementById('task-modal').classList.add('active');
     }
 
@@ -2171,284 +1948,303 @@
       document.getElementById('task-modal').classList.remove('active');
     }
 
-    // フォームの Private/Biz 切り替え
-    function setFormTaskType(type) {
-      state.formTaskType = type;
-      
-      const btns = document.querySelectorAll('#task-type-segment .segment-btn');
-      btns.forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.classList.contains(type)) {
-          btn.classList.add('active');
-        }
-      });
-      
-      populateProjectSelect();
-    }
-
-    // プロジェクト作成時のセグメント切り替え
-    function setNewProjectType(type) {
-      state.newProjectType = type;
-      const btns = document.querySelectorAll('#new-project-type .segment-btn');
-      btns.forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.classList.contains(type)) {
-          btn.classList.add('active');
-        }
-      });
-    }
-
-    // ----------------------------------
-    // タスクアクション (API通信 / ローカル処理)
-    // ----------------------------------
-    
-    // タスクの追加・保存
     async function submitTaskForm() {
       const id = document.getElementById('task-id-input').value;
-      const taskName = document.getElementById('task-title-input').value.trim();
-      const projectId = document.getElementById('task-project-select').value;
-      
-      if (!taskName) {
-        alert('タスク名を入力してください。');
-        return;
-      }
-      
-      if (!projectId) {
-        alert('プロジェクトを選択してください。プロジェクトがない場合は「フォルダ」タブから作成してください。');
+      const title = document.getElementById('task-title-input').value.trim();
+      if (!title) {
+        alert('タスク名を入力してください');
         return;
       }
 
+      const projSelect = document.getElementById('task-project-select');
+      const selectedProj = state.projects.find(p => p.id === projSelect.value);
+
       const taskData = {
-        id: id,
-        type: state.formTaskType,
-        projectId: projectId,
-        task: taskName,
+        id: id || ('tmp_' + Date.now()),
+        task: title,
+        projectName: selectedProj ? selectedProj.name : '',
+        projectId: selectedProj ? selectedProj.id : '',
         date: document.getElementById('task-date-input').value,
         startTime: document.getElementById('task-start-input').value,
         endTime: document.getElementById('task-end-input').value,
         repeat: document.getElementById('task-repeat-select').value,
-        description: document.getElementById('task-context-select').value
+        description: document.getElementById('task-context-select').value,
+        type: document.getElementById('task-type-select').value,
+        status: false
       };
 
-      // 新規作成かつ「続けて別のタスクを登録する」にチェックが入っているか判定
-      const keepOpen = !id && document.getElementById('task-keep-open').checked;
-
-      showSyncing(true);
-      if (!keepOpen) {
-        closeModal();
-      }
-
-      try {
-        const data = await callBackendApi('saveTask', { taskData });
-        if (data) {
-          state.tasks = data.tasks;
-          state.projects = data.projects;
-          state.doneTasks = data.doneTasks || [];
-          localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-          initApp();
-        }
-        
-        if (keepOpen) {
-          document.getElementById('task-title-input').value = '';
-          document.getElementById('task-context-select').value = '';
-          document.getElementById('task-start-input').value = '';
-          document.getElementById('task-end-input').value = '';
-          showToast('タスクを追加しました');
-          document.getElementById('task-title-input').focus();
-        } else {
-          showToast(id ? 'タスクを更新しました' : 'タスクを追加しました');
-        }
-      } catch (err) {
-        console.error('タスク保存エラー:', err);
-        alert('タスクの保存に失敗しました: ' + err.message);
-      } finally {
-        showSyncing(false);
-      }
-    }
-
-    // タスク完了の実行 (楽観的更新で即時反映)
-    function completeTask(event, taskId) {
-      event.stopPropagation(); // カードクリックの編集モーダル防止
-
-      const card = document.getElementById(`task-card-${taskId}`);
-      if (card) {
-        // 完了アニメーション開始
-        card.classList.add('completing');
-        const checkIcon = card.querySelector('.complete-btn span');
-        if (checkIcon) checkIcon.style.color = 'var(--status-upcoming)';
-      }
-
-      // アニメーション(0.3秒)が終わる頃に、ローカルデータを楽観的（仮）に更新して即座に画面へ反映
-      setTimeout(async () => {
-        const originalTasks = [...state.tasks];
-        const originalDoneTasks = [...state.doneTasks];
-        
-        const taskIndex = state.tasks.findIndex(t => t.id === taskId);
-        if (taskIndex === -1) return;
-        
-        const completedTask = { ...state.tasks[taskIndex], status: true };
-        
-        // 1. ローカルデータを即更新
-        state.tasks.splice(taskIndex, 1);
-        state.doneTasks.unshift(completedTask);
-        if (state.doneTasks.length > 50) {
-          state.doneTasks.pop(); // 直近50件制限
-        }
-        
-        // 2. 即座に再描画（体感ラグゼロ）
-        renderTaskList();
-        renderHistoryList();
-        
-        // 3. 裏でAPIと非同期通信
-        showSyncing(true);
-        
-        try {
-          const data = await callBackendApi('completeTask', { taskId, isDone: true });
-          if (data) {
-            state.tasks = data.tasks;
-            state.projects = data.projects;
-            state.doneTasks = data.doneTasks || [];
-            localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-            renderTaskList();
-            renderHistoryList();
-          }
-          showToast('タスクを完了し、同期しました');
-        } catch (err) {
-          console.error("完了同期エラー: " + err.message);
-          // 失敗時はロールバック
-          state.tasks = originalTasks;
-          state.doneTasks = originalDoneTasks;
-          renderTaskList();
-          renderHistoryList();
-          alert('完了処理の同期に失敗しました: ' + err.message);
-        } finally {
-          showSyncing(false);
-        }
-      }, 300);
-    }
-
-    // タスクの削除
-    async function deleteTask(taskId) {
-      if (!confirm('このタスクを削除してもよろしいですか？')) return;
-      
       closeModal();
-      showLoading(true);
-      
+
+      if (id) {
+        const idx = state.tasks.findIndex(t => t.id === id);
+        if (idx !== -1) state.tasks[idx] = taskData;
+      } else {
+        state.tasks.unshift(taskData);
+      }
+
+      renderAll();
+      showToast('保存しました');
+
       try {
-        const data = await callBackendApi('deleteTask', { taskId });
-        if (data) {
-          state.tasks = data.tasks;
-          state.projects = data.projects;
-          state.doneTasks = data.doneTasks || [];
-          localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-          initApp();
-        }
-        showToast('タスクを削除しました');
-      } catch (err) {
-        console.error('削除エラー:', err);
-        alert('削除エラー: ' + err.message);
-      } finally {
-        showLoading(false);
+        setSyncStatus('保存中...', true);
+        await callBackendApi('saveTask', { taskData });
+        setSyncStatus('同期完了', false);
+      } catch (e) {
+        console.error('保存エラー:', e);
+        showToast('保存に失敗しました');
       }
     }
 
-    // 新規プロジェクトの登録
-    async function submitNewProject() {
-      const nameInput = document.getElementById('project-name-input');
-      const name = nameInput.value.trim();
+    // フォルダ追加ダイアログ
+    async function promptNewFolder() {
+      const name = prompt('新しいフォルダ（プロジェクト）名を入力してください:');
+      if (!name || !name.trim()) return;
 
-      if (!name) {
-        alert('プロジェクト名を入力してください。');
-        return;
-      }
-
-      // すでに#で始まっていない場合は#を追加
-      const formattedName = name.startsWith('#') ? name : '#' + name;
-
-      const projectData = {
-        name: formattedName,
-        type: state.newProjectType
+      const newProj = {
+        id: 'p_' + Date.now(),
+        name: name.trim(),
+        type: 'Biz'
       };
 
-      showLoading(true);
-      
+      state.projects.push(newProj);
+      state.selectedFolder = newProj.name;
+      renderAll();
+      showToast(`フォルダ「${newProj.name}」を作成しました`);
+
       try {
-        const data = await callBackendApi('saveProject', { projectData });
-        if (data) {
-          state.tasks = data.tasks;
-          state.projects = data.projects;
-          state.doneTasks = data.doneTasks || [];
-          localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
-          initApp();
-        }
-        nameInput.value = '';
-        showToast('プロジェクトを追加しました');
-      } catch (err) {
-        console.error('プロジェクト追加エラー:', err);
-        alert('プロジェクト追加エラー: ' + err.message);
-      } finally {
-        showLoading(false);
+        await callBackendApi('saveProject', { projectData: newProj });
+      } catch (e) {
+        console.error('フォルダ作成エラー:', e);
       }
     }
 
-    // ----------------------------------
-    // 補助関数群
-    // ----------------------------------
-    
-    // YYYY-MM-DD フォーマットの日付文字列取得
-    function formatDateString(dateObj) {
-      const y = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dateObj.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+    // プロジェクトプルダウン生成
+    function populateProjectSelects() {
+      const select = document.getElementById('task-project-select');
+      if (!select) return;
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">(フォルダなし)</option>';
+
+      state.projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.innerText = p.name;
+        select.appendChild(opt);
+      });
+
+      if (currentVal) select.value = currentVal;
     }
 
-    // 今日からの相対日付文字列を取得 (モックデータ作成用)
-    function getOffsetDateString(offsetDays) {
+    // ナビゲーションレイル切り替え
+    function setRailMode(mode) {
+      state.railMode = mode;
+      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(`rail-btn-${mode}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      if (mode === 'calendar') {
+        renderMiniCalendarSidebar();
+      } else {
+        document.getElementById('sidebar-header-title').innerText = 'Folders';
+        renderSidebarFolders();
+      }
+      renderBreadcrumb();
+    }
+
+    // カレンダーサイドバーの描画
+    function renderMiniCalendarSidebar() {
+      const headerTitle = document.getElementById('sidebar-header-title');
+      if (headerTitle) headerTitle.innerText = 'Calendar';
+
+      const container = document.getElementById('folder-list');
+      if (!container) return;
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+
+      let calHtml = `
+        <div style="padding: 12px; background: #fff; margin: 8px; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: bold; font-size: 13px;">
+            <span>${currentYear}年 ${currentMonth + 1}月</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; gap: 4px; font-size: 11px;">
+            <span style="color: #ef4444;">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span style="color: #3b82f6;">土</span>
+      `;
+
+      const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+      for (let i = 0; i < firstDay; i++) {
+        calHtml += `<span></span>`;
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const taskCount = state.tasks.filter(t => !t.status && t.date === dStr).length;
+        const isToday = dStr === getTodayString();
+        const isSelected = dStr === state.selectedDate;
+
+        calHtml += `
+          <div onclick="selectCalendarDate('${dStr}')" style="cursor: pointer; padding: 4px 0; border-radius: 4px; position: relative; ${isSelected ? 'background: #0284c7; color: #fff; font-weight: bold;' : (isToday ? 'background: #e0f2fe; color: #0369a1; font-weight: bold;' : '')}">
+            ${d}
+            ${taskCount > 0 ? `<div style="width: 4px; height: 4px; background: ${isSelected ? '#fff' : '#f59e0b'}; border-radius: 50%; margin: 2px auto 0;"></div>` : ''}
+          </div>
+        `;
+      }
+
+      calHtml += `
+          </div>
+        </div>
+      `;
+      container.innerHTML = calHtml;
+    }
+
+    function selectCalendarDate(dateStr) {
+      state.selectedDate = dateStr;
+      state.selectedFolder = 'All';
+      renderBreadcrumb();
+      renderTaskTable();
+      renderMiniCalendarSidebar();
+    }
+
+    function toggleCompletedTasksView() {
+      state.showCompleted = !state.showCompleted;
+      renderBreadcrumb();
+      renderTaskTable();
+    }
+
+    function toggleSidebar() {
+      const sb = document.getElementById('sub-sidebar');
+      if (sb) sb.classList.toggle('open');
+    }
+
+    function resetFilters() {
+      state.selectedFolder = 'All';
+      state.selectedDate = null;
+      state.showCompleted = false;
+      state.searchQuery = '';
+      setRailMode('folders');
+      renderAll();
+    }
+
+    function handleSearch(val) {
+      state.searchQuery = val.trim();
+      renderTaskTable();
+    }
+
+    function toggleSortOrder() {
+      state.sortField = state.sortField === 'dueDate' ? 'priority' : 'dueDate';
+      document.getElementById('sort-label').innerText = `SORT: ${state.sortField === 'dueDate' ? 'Due Date' : 'Priority'}`;
+      renderTaskTable();
+    }
+
+    // ----------------------------------
+    // 補助関数
+    // ----------------------------------
+    function getTodayString() {
+      return formatDateString(new Date());
+    }
+
+    function getOffsetDateString(daysOffset) {
       const d = new Date();
-      d.setDate(d.getDate() + offsetDays);
+      d.setDate(d.getDate() + daysOffset);
       return formatDateString(d);
     }
 
-    // エスケープ処理
+    function formatDateString(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatShortDate(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        return `${months[m]} ${d}`;
+      }
+      return dateStr;
+    }
+
+    function compareTasksByDateAndTime(a, b) {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      const diff = a.date.localeCompare(b.date);
+      if (diff !== 0) return diff;
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    }
+
+    function getPriorityClass(task) {
+      const desc = task.description || '';
+      if (desc.includes('最優先')) return 'priority-highest';
+      if (desc.includes('優先')) return 'priority-high';
+      return 'priority-normal';
+    }
+
+    function getPriorityLabel(task) {
+      const desc = task.description || '';
+      if (desc.includes('最優先')) return '3 Top';
+      if (desc.includes('優先')) return '2 High';
+      if (desc.includes('隙間')) return '1 Medium';
+      return '0 Low';
+    }
+
     function escapeHtml(str) {
       if (!str) return '';
-      return str.replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
-    // ローディング表示切り替え
-    function showLoading(show) {
-      const loader = document.getElementById('loading');
-      if (show) {
-        loader.classList.add('active');
-      } else {
-        loader.classList.remove('active');
-      }
-    }
-
-    // 非ブロッキング同期インジケータの表示切り替え
-    function showSyncing(show) {
-      const indicator = document.getElementById('sync-indicator');
-      if (show) {
-        indicator.classList.add('active');
-      } else {
-        indicator.classList.remove('active');
-      }
-    }
-
-    // トースト通知を表示
-    function showToast(message) {
+    function showToast(msg) {
       const toast = document.getElementById('toast');
-      document.getElementById('toast-message').innerText = message;
-      toast.classList.add('active');
-      
-      setTimeout(() => {
-        toast.classList.remove('active');
-      }, 3000);
+      const toastMsg = document.getElementById('toast-message');
+      if (toast && toastMsg) {
+        toastMsg.innerText = msg;
+        toast.classList.add('active');
+        setTimeout(() => toast.classList.remove('active'), 2500);
+      }
+    }
+
+    // 設定モーダル
+    function openSettingsModal() {
+      const input = document.getElementById('gas-api-url-input');
+      if (input) input.value = gasApiUrl;
+      document.getElementById('settings-modal').classList.add('active');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').classList.remove('active');
+    }
+
+    function saveSettingsUrl() {
+      const input = document.getElementById('gas-api-url-input');
+      if (input) {
+        const val = input.value.trim();
+        gasApiUrl = val;
+        localStorage.setItem(GAS_URL_KEY, val);
+        showToast('設定を保存しました');
+        closeSettingsModal();
+        fetchInitialData();
+      }
+    }
+
+    async function testConnection() {
+      showToast('接続テスト中...');
+      try {
+        const data = await callBackendApi('getInitialData');
+        if (data) showToast('接続成功！スプレッドシートと正常に通信できました');
+      } catch (e) {
+        alert('接続に失敗しました: ' + e.message);
+      }
     }
   </script>
 </body>
