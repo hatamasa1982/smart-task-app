@@ -683,17 +683,23 @@ function getInitialData() {
     }
   }
   
-  // 1-2. コンテキストデータ取得
+  // 1-2. コンテキストデータ取得（名前が入力されている行のみ対象）
   const contextSheet = ss.getSheetByName(CONFIG.CONTEXT_SHEET_NAME);
   const contexts = [];
+  const idToContextName = {};
   if (contextSheet) {
     const values = contextSheet.getDataRange().getValues();
     for (let i = 1; i < values.length; i++) {
-      if (values[i][0] !== "" || values[i][1] !== "") {
+      const idVal = String(values[i][0] || "").trim();
+      const nameVal = String(values[i][1] || "").trim();
+      if (nameVal !== "") {
         contexts.push({
-          id: String(values[i][0]),
-          name: String(values[i][1])
+          id: idVal || nameVal,
+          name: nameVal
         });
+        if (idVal) {
+          idToContextName[idVal] = nameVal;
+        }
       }
     }
   }
@@ -709,6 +715,10 @@ function getInitialData() {
       for (let i = 1; i < values.length; i++) {
         if (values[i][CONFIG.COL_ID - 1] !== "") {
           const taskObj = parseRowToTask(values[i]);
+          // コンテキストIDが入っている場合は名前に解決
+          if (taskObj.description && idToContextName[taskObj.description]) {
+            taskObj.description = idToContextName[taskObj.description];
+          }
           // シート名に基づくデフォルト補正（未指定の場合）
           if (name === CONFIG.BIZ_SHEET_NAME && !taskObj.type) {
             taskObj.type = "Biz";
@@ -727,7 +737,11 @@ function getInitialData() {
     const startRow = Math.max(1, values.length - 50);
     for (let i = values.length - 1; i >= startRow; i--) {
       if (values[i][CONFIG.COL_ID - 1] !== "") {
-        doneTasks.push(parseRowToTask(values[i]));
+        const taskObj = parseRowToTask(values[i]);
+        if (taskObj.description && idToContextName[taskObj.description]) {
+          taskObj.description = idToContextName[taskObj.description];
+        }
+        doneTasks.push(taskObj);
       }
     }
   }

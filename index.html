@@ -697,6 +697,22 @@
     .priority-high { color: #ea580c; font-weight: 600; }
     .priority-normal { color: #4b5563; }
 
+    /* コンテキストセル */
+    .task-context-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      color: #0369a1;
+      font-weight: 500;
+      font-size: 11.5px;
+      cursor: pointer;
+    }
+
+    .task-context-cell:hover {
+      text-decoration: underline;
+      color: #0284c7;
+    }
+
     /* 操作アイコン */
     .row-action-btn {
       background: none;
@@ -1402,6 +1418,41 @@
       throw new Error('GAS URLが設定されていません');
     }
 
+    // コンテキストIDからコンテキスト名へのマッピング定義
+    const KNOWN_CONTEXT_MAP = {
+      '100': '最優先',
+      '101': '優先',
+      '102': '通常',
+      '103': '翌日以降可',
+      '104': '連絡待ち',
+      '105': '簡単',
+      '106': '隙間時間'
+    };
+
+    // コンテキスト表示名解決（数字IDは名前に変換、空文字や未設定IDは除外）
+    function getContextDisplayName(val) {
+      if (!val) return '';
+      const str = String(val).trim();
+      if (!str) return '';
+
+      // 1. 既知のIDマッピング
+      if (KNOWN_CONTEXT_MAP[str]) return KNOWN_CONTEXT_MAP[str];
+
+      // 2. state.contexts から探索（IDが一致するもので、名前が有効なもの）
+      if (state.contexts && Array.isArray(state.contexts)) {
+        const found = state.contexts.find(c => String(c.id).trim() === str && c.name && isNaN(Number(c.name)));
+        if (found) return found.name.trim();
+      }
+
+      // 3. 純粋な数字（名前のないID 107〜306など）は画面に表示しない
+      if (!isNaN(Number(str))) {
+        return '';
+      }
+
+      // 4. それ以外はコンテキスト名としてそのまま返す（先頭の @ は除去）
+      return str.replace(/^@\s*/, '').trim();
+    }
+
     // キャッシュ読み込み
     function loadCachedData() {
       try {
@@ -1409,10 +1460,16 @@
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.tasks) {
-            state.tasks = parsed.tasks || [];
+            state.tasks = (parsed.tasks || []).map(t => {
+              if (t.description) t.description = getContextDisplayName(t.description);
+              return t;
+            });
             state.projects = parsed.projects || [];
-            state.doneTasks = parsed.doneTasks || [];
-            state.contexts = parsed.contexts || [];
+            state.doneTasks = (parsed.doneTasks || []).map(t => {
+              if (t.description) t.description = getContextDisplayName(t.description);
+              return t;
+            });
+            state.contexts = (parsed.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
             renderAll();
           }
         }
@@ -1427,10 +1484,16 @@
       try {
         const data = await callBackendApi('getInitialData');
         if (data) {
-          state.tasks = data.tasks || [];
+          state.tasks = (data.tasks || []).map(t => {
+            if (t.description) t.description = getContextDisplayName(t.description);
+            return t;
+          });
           state.projects = data.projects || [];
-          state.doneTasks = data.doneTasks || [];
-          state.contexts = data.contexts || [];
+          state.doneTasks = (data.doneTasks || []).map(t => {
+            if (t.description) t.description = getContextDisplayName(t.description);
+            return t;
+          });
+          state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
           localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
           renderAll();
           setSyncStatus('同期完了', false);
@@ -1547,42 +1610,44 @@
       const allCount = state.tasks.filter(t => !t.status).length;
       list.appendChild(createContextItem('All', 'All Contexts', allCount, null));
 
-      // 2. スプレッドシートの contexts とタスク内のコンテキストを統合
+      // 2. コンテキスト一覧（名前のみを対象とし、数字IDだけのものは完全に除外）
       const contextMap = new Map();
 
-      // スプレッドシート由来のコンテキスト
+      // スプレッドシート由来のコンテキスト（有効なコンテキスト名があるもののみ）
       if (state.contexts && Array.isArray(state.contexts)) {
         state.contexts.forEach(c => {
-          const cName = (c.name || c.id || '').trim();
-          if (cName) contextMap.set(cName, { id: c.id || cName, name: cName, isDb: true });
+          const cName = (c.name || '').trim();
+          if (cName && isNaN(Number(cName))) {
+            contextMap.set(cName, { id: c.id || cName, name: cName, isDb: true });
+          }
         });
       }
 
-      // デフォルト候補（まだなければ追加）
-      const defaults = ['000=inbox', '024=後回し可', '最優先', '優先', '隙間時間'];
+      // デフォルト候補（スプレッドシートの標準コンテキスト名）
+      const defaults = ['最優先', '優先', '通常', '翌日以降可', '連絡待ち', '簡単', '隙間時間'];
       defaults.forEach(d => {
         if (!contextMap.has(d)) {
           contextMap.set(d, { id: null, name: d, isDb: false });
         }
       });
 
-      // タスク内で使われているコンテキストも拾い上げる
+      // タスク内で使われているコンテキスト（数字以外の名称）
       state.tasks.filter(t => !t.status).forEach(t => {
-        const desc = (t.description || '').trim();
-        if (desc && !contextMap.has(desc)) {
-          contextMap.set(desc, { id: null, name: desc, isDb: false });
+        const cName = getContextDisplayName(t.description);
+        if (cName && !contextMap.has(cName)) {
+          contextMap.set(cName, { id: null, name: cName, isDb: false });
         }
       });
 
       // 各コンテキストの未完了タスク数を集計して行を描画
       contextMap.forEach(item => {
-        const count = state.tasks.filter(t => !t.status && (t.description || '').includes(item.name)).length;
+        const count = state.tasks.filter(t => !t.status && getContextDisplayName(t.description) === item.name).length;
         const displayLabel = item.name.replace(/^@\s*/, '');
         list.appendChild(createContextItem(item.name, displayLabel, count, item.id));
       });
 
-      // No Context
-      const noCtxCount = state.tasks.filter(t => !t.status && (!t.description || !t.description.trim())).length;
+      // No Context (コンテキスト未設定)
+      const noCtxCount = state.tasks.filter(t => !t.status && !getContextDisplayName(t.description)).length;
       list.appendChild(createContextItem('No Context', 'No Context', noCtxCount, null));
     }
 
@@ -1661,9 +1726,9 @@
       // コンテキストによるフィルタ
       if (state.selectedContext !== 'All') {
         if (state.selectedContext === 'No Context') {
-          taskList = taskList.filter(t => !t.description || !t.description.trim());
+          taskList = taskList.filter(t => !getContextDisplayName(t.description));
         } else {
-          taskList = taskList.filter(t => (t.description || '').includes(state.selectedContext));
+          taskList = taskList.filter(t => getContextDisplayName(t.description) === state.selectedContext);
         }
       }
 
@@ -1678,7 +1743,8 @@
         taskList = taskList.filter(t => 
           (t.task && t.task.toLowerCase().includes(q)) || 
           (t.projectName && t.projectName.toLowerCase().includes(q)) ||
-          (t.description && t.description.toLowerCase().includes(q))
+          (t.description && t.description.toLowerCase().includes(q)) ||
+          (getContextDisplayName(t.description).toLowerCase().includes(q))
         );
       }
 
@@ -1710,12 +1776,12 @@
       const groups = {};
 
       if (isContextMode) {
-        // コンテキスト別にグループ化（画像2スタイル！）
+        // コンテキスト別にグループ化（数字IDではなく解決後のコンテキスト名を使用）
         taskList.forEach(t => {
-          const cName = (t.description || '').trim() || 'No Context';
+          const cName = getContextDisplayName(t.description) || 'No Context';
           const grpKey = 'ctx_' + cName;
           if (!groups[grpKey]) {
-            groups[grpKey] = { label: `@ ${cName}`, icon: 'label', list: [] };
+            groups[grpKey] = { label: cName === 'No Context' ? 'No Context' : `@ ${cName}`, icon: 'label', list: [] };
           }
           groups[grpKey].list.push(t);
         });
@@ -1846,8 +1912,10 @@
             ${getPriorityLabel(task)}
           </span>
         </td>
-        <td class="col-context">
-          <span style="color: #64748b; font-size: 11.5px;">${escapeHtml(task.description || '')}</span>
+        <td class="col-context" id="task-context-${task.id}">
+          <span class="task-context-cell editable-cell" onclick="startInlineEditContext(event, '${task.id}')" title="クリックしてコンテキストを変更">
+            ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
+          </span>
         </td>
         <td class="col-time" id="task-time-${task.id}">
           <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を変更" style="color: #64748b; font-size: 11.5px;">
@@ -2057,6 +2125,56 @@
 
       input.onchange = () => finish(true);
       input.onblur = () => finish(true);
+    }
+
+    // 6. コンテキストのインライン編集（名称のみ選択）
+    function startInlineEditContext(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-context-${taskId}`);
+      if (!cell || cell.querySelector('select')) return;
+
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const currentCtx = getContextDisplayName(task.description);
+
+      // 利用可能なコンテキスト一覧（名前のみ）
+      const ctxOptions = ['最優先', '優先', '通常', '翌日以降可', '連絡待ち', '簡単', '隙間時間'];
+      if (state.contexts && Array.isArray(state.contexts)) {
+        state.contexts.forEach(c => {
+          const cName = (c.name || '').trim();
+          if (cName && isNaN(Number(cName)) && !ctxOptions.includes(cName)) {
+            ctxOptions.push(cName);
+          }
+        });
+      }
+
+      let selectHtml = `<select class="inline-edit-select" id="input-ctx-${taskId}">`;
+      selectHtml += `<option value="">(なし)</option>`;
+      ctxOptions.forEach(opt => {
+        const isSel = (opt === currentCtx);
+        selectHtml += `<option value="${escapeHtml(opt)}" ${isSel ? 'selected' : ''}>@ ${escapeHtml(opt)}</option>`;
+      });
+      selectHtml += `</select>`;
+
+      cell.innerHTML = selectHtml;
+      const select = document.getElementById(`input-ctx-${taskId}`);
+      select.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        if (save) {
+          const newVal = select.value;
+          updateTaskInline(taskId, { description: newVal });
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      select.onchange = () => finish(true);
+      select.onblur = () => finish(false);
     }
 
     // 共通インライン更新関数
@@ -2315,7 +2433,7 @@
       if (currentVal) select.value = currentVal;
     }
 
-    // コンテキストプルダウン生成（タスク編集モーダル用）
+    // コンテキストプルダウン生成（タスク編集モーダル用：名前のみ表示）
     function populateContextSelect() {
       const select = document.getElementById('task-context-select');
       if (!select) return;
@@ -2323,13 +2441,15 @@
       select.innerHTML = '<option value="">(なし)</option>';
 
       const added = new Set();
-      // デフォルト優先度
+      // デフォルトの標準コンテキスト名（スプレッドシート準拠）
       const baseDefaults = [
         { val: '最優先', label: '🔥 最優先' },
         { val: '優先', label: '⭐ 優先' },
-        { val: '隙間時間', label: '☕ 隙間時間' },
-        { val: '000=inbox', label: '000=inbox' },
-        { val: '024=後回し可', label: '024=後回し可' }
+        { val: '通常', label: '📌 通常' },
+        { val: '翌日以降可', label: '⏳ 翌日以降可' },
+        { val: '連絡待ち', label: '📞 連絡待ち' },
+        { val: '簡単', label: '⚡ 簡単' },
+        { val: '隙間時間', label: '☕ 隙間時間' }
       ];
       baseDefaults.forEach(b => {
         const opt = document.createElement('option');
@@ -2339,11 +2459,11 @@
         added.add(b.val);
       });
 
-      // スプレッドシート由来のコンテキスト
+      // スプレッドシート由来のコンテキスト（名前が存在し、数字ではないもののみ追加）
       if (state.contexts && Array.isArray(state.contexts)) {
         state.contexts.forEach(c => {
-          const cName = (c.name || c.id || '').trim();
-          if (cName && !added.has(cName)) {
+          const cName = (c.name || '').trim();
+          if (cName && isNaN(Number(cName)) && !added.has(cName)) {
             const opt = document.createElement('option');
             opt.value = cName;
             opt.innerText = `@ ${cName}`;
