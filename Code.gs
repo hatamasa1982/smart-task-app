@@ -1038,7 +1038,7 @@ function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   if (!location) {
     // 一時ID（tmp_...）または見つからない場合でも、すでに削除されたとみなしてエラーにせず同期
     console.warn("指定されたタスクが見つかりませんでした（すでに削除済みの可能性があります）。ID: " + taskId);
-    return getInitialData();
+    return { status: 'success', deletedId: taskId };
   }
   
   const { sheet, row } = location;
@@ -1046,7 +1046,7 @@ function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   SpreadsheetApp.flush();
   sortAll(sheet);
   
-  return getInitialData();
+  return { status: 'success', deletedId: taskId };
 }
 
 /**

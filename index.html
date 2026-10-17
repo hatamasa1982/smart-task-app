@@ -3058,27 +3058,35 @@
 
       if (!confirm(`タスク「${task.task}」を削除しますか？`)) return;
 
-      // 楽観的削除
+      // 1. 画面から即座に削除（楽観的削除）
       state.tasks = state.tasks.filter(t => t.id !== taskId);
       state.doneTasks = state.doneTasks.filter(t => t.id !== taskId);
       renderAll();
       showToast('タスクを削除しました 🗑️');
 
+      // 2. ローカルキャッシュからも即座に削除して復活を防止
+      try {
+        const cached = localStorage.getItem(CACHE_DATA_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed) {
+            if (Array.isArray(parsed.tasks)) parsed.tasks = parsed.tasks.filter(t => t.id !== taskId);
+            if (Array.isArray(parsed.doneTasks)) parsed.doneTasks = parsed.doneTasks.filter(t => t.id !== taskId);
+            localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(parsed));
+          }
+        }
+      } catch (cacheErr) {
+        console.warn('キャッシュ削除エラー:', cacheErr);
+      }
+
+      // 3. バックエンドへ削除リクエスト送信
       try {
         setSyncStatus('削除中...', true);
-        const res = await callBackendApi('deleteTask', { 
+        await callBackendApi('deleteTask', { 
           taskId, 
           taskName: task ? task.task : '',
           taskDate: task ? task.date : ''
         });
-        if (res && res.tasks) {
-          state.tasks = res.tasks.map(t => {
-            if (t.description) t.description = getContextDisplayName(t.description);
-            return t;
-          });
-          state.projects = applySavedFolderOrder(res.projects || []);
-          renderAll();
-        }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('削除エラー:', e);
