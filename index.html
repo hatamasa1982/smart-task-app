@@ -591,10 +591,31 @@
     .col-task { min-width: 250px; }
     .col-due { width: 105px; }
     .col-context { width: 110px; }
-    .col-start-time { width: 85px; }
-    .col-end-time { width: 85px; }
+    .col-time { width: 120px; }
     .col-repeat { width: 75px; }
     .col-actions { width: 45px; text-align: center !important; }
+
+    /* 時間インライン入力用フレックスコンテナ */
+    .inline-time-container {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      background: #ffffff;
+      padding: 1px 3px;
+      border: 1px solid #0284c7;
+      border-radius: 4px;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+    }
+    .inline-time-container input[type="time"] {
+      border: none;
+      outline: none;
+      padding: 1px 0;
+      font-size: 11px;
+      font-family: inherit;
+      color: #1e293b;
+      background: transparent;
+      width: 52px;
+    }
 
     /* グループ見出し行（Due in the past, Today など） */
     .table-group-row td {
@@ -1079,7 +1100,7 @@
       .sub-sidebar.open {
         transform: translateX(0);
       }
-      .col-folder, .col-repeat, .col-start-time, .col-end-time {
+      .col-folder, .col-repeat, .col-time {
         display: none;
       }
     }
@@ -1222,8 +1243,7 @@
               <th class="col-task">Task</th>
               <th class="col-due">Due Date</th>
               <th class="col-context">Context</th>
-              <th class="col-start-time">開始時間</th>
-              <th class="col-end-time">終了時間</th>
+              <th class="col-time">時間</th>
               <th class="col-repeat">Repeat</th>
               <th class="col-actions"></th>
             </tr>
@@ -1996,7 +2016,7 @@
           const groupTr = document.createElement('tr');
           groupTr.className = 'table-group-row';
           groupTr.innerHTML = `
-            <td colspan="10">
+            <td colspan="9">
               <div class="group-header-content">
                 <span class="material-symbols-outlined" style="font-size: 15px;">${grp.icon || 'calendar_today'}</span>
                 <span>${grp.label} (${grp.list.length})</span>
@@ -2012,6 +2032,16 @@
           });
         }
       });
+    }
+
+    // 時間範囲フォーマット（例: 06:30 - 07:30）
+    function formatTimeRange(start, end) {
+      const s = (start || '').trim();
+      const e = (end || '').trim();
+      if (s && e) return `${s} - ${e}`;
+      if (s) return `${s} - --:--`;
+      if (e) return `--:-- - ${e}`;
+      return '--:--';
     }
 
     // タスク行の作成（インライン編集対応）
@@ -2064,14 +2094,9 @@
             ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
           </span>
         </td>
-        <td class="col-start-time" id="task-start-${task.id}">
-          <span class="editable-cell" onclick="startInlineEditStartTime(event, '${task.id}')" title="クリックして開始時間を変更" style="color: #64748b; font-size: 11.5px;">
-            ${task.startTime ? task.startTime : '--:--'}
-          </span>
-        </td>
-        <td class="col-end-time" id="task-end-${task.id}">
-          <span class="editable-cell" onclick="startInlineEditEndTime(event, '${task.id}')" title="クリックして終了時間を変更" style="color: #64748b; font-size: 11.5px;">
-            ${task.endTime ? task.endTime : '--:--'}
+        <td class="col-time" id="task-time-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を編集" style="color: #64748b; font-size: 11.5px; font-variant-numeric: tabular-nums;">
+            ${formatTimeRange(task.startTime, task.endTime)}
           </span>
         </td>
         <td class="col-repeat" id="task-repeat-${task.id}">
@@ -2252,70 +2277,63 @@
       select.onblur = () => finish(false);
     }
 
-    // 5. 開始時間のインライン編集
-    function startInlineEditStartTime(e, taskId) {
+    // 5. 時間（開始時間・終了時間セット）のインライン編集
+    function startInlineEditTime(e, taskId) {
       e.stopPropagation();
-      const cell = document.getElementById(`task-start-${taskId}`);
+      const cell = document.getElementById(`task-time-${taskId}`);
       if (!cell || cell.querySelector('input')) return;
 
       const task = state.tasks.find(t => t.id === taskId);
       if (!task) return;
 
-      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-start-${taskId}" value="${task.startTime || ''}">`;
-      const input = document.getElementById(`input-start-${taskId}`);
-      input.focus();
+      const currentStart = task.startTime || '';
+      const currentEnd = task.endTime || '';
+
+      cell.innerHTML = `
+        <div class="inline-time-container" id="time-container-${taskId}">
+          <input type="time" id="input-start-${taskId}" value="${currentStart}" title="開始時間">
+          <span style="font-size: 10px; color: #94a3b8; user-select: none;">-</span>
+          <input type="time" id="input-end-${taskId}" value="${currentEnd}" title="終了時間">
+        </div>
+      `;
+
+      const startInput = document.getElementById(`input-start-${taskId}`);
+      const endInput = document.getElementById(`input-end-${taskId}`);
+
+      startInput.focus();
 
       let isFinished = false;
       const finish = (save) => {
         if (isFinished) return;
         isFinished = true;
-        const newVal = input.value;
-        if (save && newVal !== task.startTime) {
-          updateTaskInline(taskId, { startTime: newVal });
+        const newStart = startInput.value;
+        const newEnd = endInput.value;
+        if (save && (newStart !== currentStart || newEnd !== currentEnd)) {
+          updateTaskInline(taskId, { startTime: newStart, endTime: newEnd });
         } else {
           renderTaskTable();
         }
       };
 
-      // Enterキーで確定、Escapeでキャンセル、枠外クリック（blur）で確定
-      input.onkeydown = (ev) => {
+      // キーボード操作：Enterで確定、Escapeでキャンセル
+      const handleKeyDown = (ev) => {
         if (ev.key === 'Enter') finish(true);
         else if (ev.key === 'Escape') finish(false);
       };
-      input.onblur = () => finish(true);
-    }
+      startInput.onkeydown = handleKeyDown;
+      endInput.onkeydown = handleKeyDown;
 
-    // 5-2. 終了時間のインライン編集
-    function startInlineEditEndTime(e, taskId) {
-      e.stopPropagation();
-      const cell = document.getElementById(`task-end-${taskId}`);
-      if (!cell || cell.querySelector('input')) return;
-
-      const task = state.tasks.find(t => t.id === taskId);
-      if (!task) return;
-
-      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-end-${taskId}" value="${task.endTime || ''}">`;
-      const input = document.getElementById(`input-end-${taskId}`);
-      input.focus();
-
-      let isFinished = false;
-      const finish = (save) => {
-        if (isFinished) return;
-        isFinished = true;
-        const newVal = input.value;
-        if (save && newVal !== task.endTime) {
-          updateTaskInline(taskId, { endTime: newVal });
-        } else {
-          renderTaskTable();
-        }
+      // 枠外クリック（両方の入力欄からフォーカスが外れた場合）で一括確定
+      const handleBlur = () => {
+        setTimeout(() => {
+          const active = document.activeElement;
+          if (active !== startInput && active !== endInput) {
+            finish(true);
+          }
+        }, 120);
       };
-
-      // Enterキーで確定、Escapeでキャンセル、枠外クリック（blur）で確定
-      input.onkeydown = (ev) => {
-        if (ev.key === 'Enter') finish(true);
-        else if (ev.key === 'Escape') finish(false);
-      };
-      input.onblur = () => finish(true);
+      startInput.onblur = handleBlur;
+      endInput.onblur = handleBlur;
     }
 
     // 6. コンテキストのインライン編集（名称のみ選択）
