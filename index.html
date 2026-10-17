@@ -1155,14 +1155,14 @@
     
     <!-- 1. 最左列ナビゲーションレイル -->
     <nav class="nav-rail">
+      <button class="rail-btn" id="rail-btn-calendar" onclick="setRailMode('calendar')" data-tooltip="Calendar (カレンダー)">
+        <span class="material-symbols-outlined">calendar_month</span>
+      </button>
       <button class="rail-btn active" id="rail-btn-folders" onclick="setRailMode('folders')" data-tooltip="Folders (プロジェクト)">
         <span class="material-symbols-outlined">folder</span>
       </button>
       <button class="rail-btn" id="rail-btn-contexts" onclick="setRailMode('contexts')" data-tooltip="Contexts (コンテキスト)">
         <span style="font-weight: bold; font-size: 17px; font-family: monospace;">@</span>
-      </button>
-      <button class="rail-btn" id="rail-btn-calendar" onclick="setRailMode('calendar')" data-tooltip="Calendar (カレンダー)">
-        <span class="material-symbols-outlined">calendar_month</span>
       </button>
       <button class="rail-btn" id="rail-btn-all" onclick="selectFolder('All')" data-tooltip="All Tasks (全タスク)">
         <span class="material-symbols-outlined">playlist_add_check</span>
