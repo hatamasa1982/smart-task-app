@@ -1278,7 +1278,7 @@
         <!-- 区分（Biz / Private） -->
         <div class="form-group">
           <label class="form-label">区分</label>
-          <select id="task-type-select" class="form-select">
+          <select id="task-type-select" class="form-select" onchange="handleTaskTypeChange()">
             <option value="Biz">Biz (仕事)</option>
             <option value="Private">Private (個人)</option>
           </select>
@@ -1287,7 +1287,7 @@
         <!-- プロジェクト（フォルダ） -->
         <div class="form-group">
           <label class="form-label" for="task-project-select">フォルダ (Project)</label>
-          <select id="task-project-select" class="form-select"></select>
+          <select id="task-project-select" class="form-select" onchange="handleTaskProjectChange()"></select>
         </div>
 
         <!-- タスク名 -->
@@ -1635,7 +1635,8 @@
       }
       renderBreadcrumb();
       renderTaskTable();
-      populateProjectSelects();
+      const currentModalType = document.getElementById('task-type-select') ? document.getElementById('task-type-select').value : '';
+      populateProjectSelects(currentModalType);
       populateContextSelect();
     }
 
@@ -2567,12 +2568,24 @@
       document.getElementById('task-repeat-select').value = 'None';
       document.getElementById('task-context-select').value = '';
 
-      // プロジェクト初期値
-      const projSelect = document.getElementById('task-project-select');
+      // 現在選択中のフォルダ情報から初期区分（Biz/Private）を判定
+      let initialType = 'Biz';
+      let targetProjectId = '';
       if (state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder') {
         const found = state.projects.find(p => p.name === state.selectedFolder);
-        if (found) projSelect.value = found.id;
+        if (found) {
+          targetProjectId = found.id;
+          if (found.type) initialType = found.type;
+        }
       }
+
+      const typeSelect = document.getElementById('task-type-select');
+      if (typeSelect) typeSelect.value = initialType;
+
+      // 区分に応じたフォルダリストを生成
+      populateProjectSelects(initialType);
+      const projSelect = document.getElementById('task-project-select');
+      if (targetProjectId) projSelect.value = targetProjectId;
 
       document.getElementById('task-modal').classList.add('active');
       document.getElementById('task-title-input').focus();
@@ -2589,9 +2602,12 @@
       document.getElementById('task-start-input').value = task.startTime || '';
       document.getElementById('task-end-input').value = task.endTime || '';
       document.getElementById('task-repeat-select').value = task.repeat || 'None';
-      document.getElementById('task-type-select').value = task.type || 'Biz';
+      
+      const taskType = task.type || 'Biz';
+      document.getElementById('task-type-select').value = taskType;
 
-      populateProjectSelects();
+      // 区分に応じたフォルダリストを生成
+      populateProjectSelects(taskType);
       const projSelect = document.getElementById('task-project-select');
       if (task.projectId) projSelect.value = task.projectId;
       else {
@@ -2690,21 +2706,57 @@
       }
     }
 
-    // プロジェクトプルダウン生成
-    function populateProjectSelects() {
+    // 区分選択変更時：フォルダ一覧を絞り込み
+    function handleTaskTypeChange() {
+      const typeSelect = document.getElementById('task-type-select');
+      const selectedType = typeSelect ? typeSelect.value : '';
+      populateProjectSelects(selectedType);
+    }
+
+    // フォルダ選択変更時：そのフォルダの区分（Biz/Private）を区分セレクトに自動反映
+    function handleTaskProjectChange() {
+      const projSelect = document.getElementById('task-project-select');
+      if (!projSelect || !projSelect.value) return;
+      const chosenProj = state.projects.find(p => p.id === projSelect.value);
+      if (chosenProj && chosenProj.type) {
+        const typeSelect = document.getElementById('task-type-select');
+        if (typeSelect && typeSelect.value !== chosenProj.type) {
+          typeSelect.value = chosenProj.type;
+        }
+      }
+    }
+
+    // プロジェクト（フォルダ）プルダウン生成（区分による絞り込み対応）
+    function populateProjectSelects(filterType) {
       const select = document.getElementById('task-project-select');
       if (!select) return;
       const currentVal = select.value;
       select.innerHTML = '<option value="">(フォルダなし)</option>';
 
-      state.projects.forEach(p => {
+      // filterType がある場合はその区分に該当するフォルダのみ表示
+      let filtered = state.projects;
+      if (filterType) {
+        filtered = state.projects.filter(p => {
+          if (!p.type) return true; // 区分未設定フォルダはどちらでも表示
+          return p.type.toLowerCase() === filterType.toLowerCase();
+        });
+      }
+
+      filtered.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.innerText = p.name;
         select.appendChild(opt);
       });
 
-      if (currentVal) select.value = currentVal;
+      // 既存の選択が絞り込み結果内にあれば維持、なければ先頭を選択
+      if (currentVal && filtered.some(p => p.id === currentVal)) {
+        select.value = currentVal;
+      } else if (filtered.length > 0) {
+        select.value = filtered[0].id;
+      } else {
+        select.value = '';
+      }
     }
 
     // コンテキストプルダウン生成（タスク編集モーダル用：名前のみ表示）
