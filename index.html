@@ -1316,6 +1316,7 @@
             <option value="Weekly">毎週 (Weekly)</option>
             <option value="Biweekly">隔週 (Biweekly)</option>
             <option value="Monthly">毎月 (Monthly)</option>
+            <option value="Copy">完了時複製 (Copy)</option>
           </select>
         </div>
       </div>
@@ -2067,8 +2068,10 @@
             ${task.endTime ? task.endTime : '--:--'}
           </span>
         </td>
-        <td class="col-repeat">
-          <span style="color: #94a3b8; font-size: 11px;">${task.repeat || 'None'}</span>
+        <td class="col-repeat" id="task-repeat-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditRepeat(event, '${task.id}')" title="クリックしてリピート設定を変更" style="color: ${task.repeat && task.repeat !== 'None' ? '#0369a1' : '#94a3b8'}; font-size: 11.5px; font-weight: ${task.repeat && task.repeat !== 'None' ? '600' : 'normal'};">
+            ${task.repeat || 'None'}
+          </span>
         </td>
         <td class="col-actions">
           <div class="row-actions-group">
@@ -2350,6 +2353,52 @@
         if (save) {
           const newVal = select.value;
           updateTaskInline(taskId, { description: newVal });
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      select.onchange = () => finish(true);
+      select.onblur = () => finish(false);
+    }
+
+    // 7. リピート設定のインライン編集
+    function startInlineEditRepeat(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-repeat-${taskId}`);
+      if (!cell || cell.querySelector('select')) return;
+
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const currentRepeat = task.repeat || 'None';
+      const repeatOptions = [
+        { val: 'None', label: 'None (なし)' },
+        { val: 'Daily', label: 'Daily (毎日)' },
+        { val: 'Weekly', label: 'Weekly (毎週)' },
+        { val: 'Biweekly', label: 'Biweekly (隔週)' },
+        { val: 'Monthly', label: 'Monthly (毎月)' },
+        { val: 'Copy', label: 'Copy (完了時複製)' }
+      ];
+
+      let selectHtml = `<select class="inline-edit-select" id="input-repeat-${taskId}">`;
+      repeatOptions.forEach(opt => {
+        const isSel = (opt.val.toUpperCase() === currentRepeat.toUpperCase());
+        selectHtml += `<option value="${opt.val}" ${isSel ? 'selected' : ''}>${opt.label}</option>`;
+      });
+      selectHtml += `</select>`;
+
+      cell.innerHTML = selectHtml;
+      const select = document.getElementById(`input-repeat-${taskId}`);
+      select.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        if (save) {
+          const newVal = select.value;
+          updateTaskInline(taskId, { repeat: newVal });
         } else {
           renderTaskTable();
         }
