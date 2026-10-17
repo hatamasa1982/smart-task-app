@@ -667,17 +667,19 @@ function doPost(e) {
 function getInitialData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 1. プロジェクトデータ取得
+  // 1. プロジェクトデータ取得（名前が入力されている行のみ対象）
   const projectSheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
   const projects = [];
   if (projectSheet) {
     const values = projectSheet.getDataRange().getValues();
     for (let i = 1; i < values.length; i++) {
-      if (values[i][0] !== "") {
+      const pId = String(values[i][0] || "").trim();
+      const pName = String(values[i][1] || "").trim();
+      if (pId !== "" && pName !== "") {
         projects.push({
-          id: String(values[i][0]),
-          name: String(values[i][1]),
-          type: String(values[i][2])
+          id: pId,
+          name: pName,
+          type: String(values[i][2] || "Private")
         });
       }
     }

@@ -399,6 +399,34 @@
       color: #0369a1;
     }
 
+    /* フォルダのドラッグ＆ドロップ用スタイル */
+    .folder-item.draggable {
+      cursor: grab;
+    }
+    .folder-item.dragging {
+      opacity: 0.35;
+      background: #e2e8f0;
+      border: 1px dashed #0284c7;
+    }
+    .folder-item.drag-over-top {
+      border-top: 2px solid #0284c7 !important;
+    }
+    .folder-item.drag-over-bottom {
+      border-bottom: 2px solid #0284c7 !important;
+    }
+    .folder-drag-handle {
+      color: #cbd5e1;
+      cursor: grab;
+      font-size: 15px;
+      margin-right: -3px;
+      display: inline-flex;
+      align-items: center;
+      transition: color 0.15s ease;
+    }
+    .folder-item:hover .folder-drag-handle {
+      color: #64748b;
+    }
+
     .sidebar-add-folder-btn {
       margin: 10px 14px;
       padding: 6px 10px;
@@ -1128,6 +1156,9 @@
       <div class="sidebar-header">
         <span id="sidebar-header-title">Folders</span>
         <div class="sidebar-header-actions">
+          <button class="sidebar-icon-btn" id="btn-sort-folders-az" onclick="sortFoldersAlphabetically()" title="フォルダを番号・名前順（A→Z）で整列">
+            <span class="material-symbols-outlined" style="font-size: 16px;">sort_by_alpha</span>
+          </button>
           <button class="sidebar-icon-btn" onclick="handleSidebarAction()" title="新規追加">
             <span class="material-symbols-outlined" style="font-size: 18px;" id="sidebar-header-action-icon">add</span>
           </button>
@@ -1453,6 +1484,56 @@
       return str.replace(/^@\s*/, '').trim();
     }
 
+    const FOLDER_ORDER_KEY = 'smart_task_folder_order';
+
+    // 保存されたフォルダ並び順を適用
+    function applySavedFolderOrder(projects) {
+      if (!Array.isArray(projects)) return [];
+      // 有効な名前を持つプロジェクトのみ対象
+      const valid = projects.filter(p => p && p.name && String(p.name).trim() !== '');
+      try {
+        const savedOrder = JSON.parse(localStorage.getItem(FOLDER_ORDER_KEY));
+        if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+          const map = new Map();
+          valid.forEach(p => map.set(p.name, p));
+          const sorted = [];
+          // 保存された順序に従って配置
+          savedOrder.forEach(key => {
+            if (map.has(key)) {
+              sorted.push(map.get(key));
+              map.delete(key);
+            }
+          });
+          // 新規追加等で順序リストに含まれていなかったものを末尾に追加
+          map.forEach(p => sorted.push(p));
+          return sorted;
+        }
+      } catch (e) {
+        console.warn('フォルダ並び順読込エラー:', e);
+      }
+      return valid;
+    }
+
+    // 現在のフォルダ並び順をlocalStorageに保存
+    function saveFolderOrder() {
+      try {
+        const order = state.projects.map(p => p.name);
+        localStorage.setItem(FOLDER_ORDER_KEY, JSON.stringify(order));
+      } catch (e) {
+        console.warn('フォルダ並び順保存エラー:', e);
+      }
+    }
+
+    // フォルダを番号・名前順（A→Z）で自然順序ソート
+    function sortFoldersAlphabetically() {
+      state.projects.sort((a, b) => {
+        return (a.name || '').localeCompare(b.name || '', 'ja', { numeric: true, sensitivity: 'base' });
+      });
+      saveFolderOrder();
+      renderAll();
+      showToast('フォルダを番号・名前順（A→Z）に整列しました 🔤');
+    }
+
     // キャッシュ読み込み
     function loadCachedData() {
       try {
@@ -1464,7 +1545,7 @@
               if (t.description) t.description = getContextDisplayName(t.description);
               return t;
             });
-            state.projects = parsed.projects || [];
+            state.projects = applySavedFolderOrder(parsed.projects || []);
             state.doneTasks = (parsed.doneTasks || []).map(t => {
               if (t.description) t.description = getContextDisplayName(t.description);
               return t;
@@ -1488,7 +1569,7 @@
             if (t.description) t.description = getContextDisplayName(t.description);
             return t;
           });
-          state.projects = data.projects || [];
+          state.projects = applySavedFolderOrder(data.projects || []);
           state.doneTasks = (data.doneTasks || []).map(t => {
             if (t.description) t.description = getContextDisplayName(t.description);
             return t;
@@ -1532,6 +1613,9 @@
       populateContextSelect();
     }
 
+    // ドラッグ中のプロジェクト識別用変数
+    let draggedProjectName = null;
+
     // サブサイドバーのフォルダ一覧
     function renderSidebarFolders() {
       const titleEl = document.getElementById('sidebar-header-title');
@@ -1540,6 +1624,8 @@
       if (actionText) actionText.innerText = 'Add a folder';
       const actionBtn = document.getElementById('sidebar-action-btn');
       if (actionBtn) actionBtn.style.display = 'flex';
+      const azBtn = document.getElementById('btn-sort-folders-az');
+      if (azBtn) azBtn.style.display = 'inline-flex';
 
       const list = document.getElementById('folder-list');
       if (!list) return;
@@ -1547,42 +1633,102 @@
 
       // 1. All Tasks
       const allCount = state.tasks.filter(t => !t.status).length;
-      list.appendChild(createFolderItem('All', 'All Tasks', allCount, 'inbox'));
+      list.appendChild(createFolderItem('All', 'All Tasks', allCount, 'inbox', false));
 
-      // 2. 000_inbox (存在すれば優先表示)
-      const inboxProj = state.projects.find(p => p.name.includes('inbox') || p.name.includes('インボックス'));
-      if (inboxProj) {
-        const inboxCount = state.tasks.filter(t => !t.status && t.projectName === inboxProj.name).length;
-        list.appendChild(createFolderItem(inboxProj.name, inboxProj.name, inboxCount, 'mail'));
-      }
+      // 2. 有効なプロジェクトのみを対象（空名フォルダは完全除外）
+      const validProjects = state.projects.filter(p => p && p.name && String(p.name).trim() !== '');
 
-      // 3. 各プロジェクト一覧
-      state.projects.forEach(p => {
-        if (inboxProj && p.name === inboxProj.name) return;
+      // 3. 各プロジェクト一覧（ドラッグ＆ドロップ対応）
+      validProjects.forEach(p => {
         const count = state.tasks.filter(t => !t.status && (t.projectName === p.name || t.projectId === p.id)).length;
-        list.appendChild(createFolderItem(p.name, p.name, count, 'folder'));
+        const isInbox = p.name.includes('inbox') || p.name.includes('インボックス');
+        list.appendChild(createFolderItem(p.name, p.name, count, isInbox ? 'mail' : 'folder', true));
       });
 
       // 4. No Folder (未分類)
       const noFolderCount = state.tasks.filter(t => !t.status && !t.projectName && !t.projectId).length;
-      list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off'));
+      list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off', false));
     }
 
-    function createFolderItem(folderKey, label, count, iconName) {
+    function createFolderItem(folderKey, label, count, iconName, isDraggable = false) {
       const li = document.createElement('li');
-      li.className = 'folder-item' + (state.selectedFolder === folderKey ? ' active' : '');
+      li.className = 'folder-item' + (state.selectedFolder === folderKey ? ' active' : '') + (isDraggable ? ' draggable' : '');
       li.onclick = () => selectFolder(folderKey);
+
+      // ドラッグ＆ドロップイベント設定
+      if (isDraggable) {
+        li.setAttribute('draggable', 'true');
+
+        li.ondragstart = (e) => {
+          draggedProjectName = folderKey;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', folderKey);
+          setTimeout(() => li.classList.add('dragging'), 0);
+        };
+
+        li.ondragover = (e) => {
+          e.preventDefault();
+          if (!draggedProjectName || draggedProjectName === folderKey) return;
+          e.dataTransfer.dropEffect = 'move';
+          const rect = li.getBoundingClientRect();
+          const isTop = (e.clientY - rect.top) < (rect.height / 2);
+          li.classList.toggle('drag-over-top', isTop);
+          li.classList.toggle('drag-over-bottom', !isTop);
+        };
+
+        li.ondragleave = () => {
+          li.classList.remove('drag-over-top', 'drag-over-bottom');
+        };
+
+        li.ondrop = (e) => {
+          e.preventDefault();
+          li.classList.remove('drag-over-top', 'drag-over-bottom');
+          if (!draggedProjectName || draggedProjectName === folderKey) return;
+
+          const rect = li.getBoundingClientRect();
+          const insertBefore = (e.clientY - rect.top) < (rect.height / 2);
+          reorderProjects(draggedProjectName, folderKey, insertBefore);
+        };
+
+        li.ondragend = () => {
+          li.classList.remove('dragging');
+          document.querySelectorAll('.folder-item').forEach(el => {
+            el.classList.remove('drag-over-top', 'drag-over-bottom', 'dragging');
+          });
+          draggedProjectName = null;
+        };
+      }
 
       li.innerHTML = `
         <div class="folder-item-left">
+          ${isDraggable ? '<span class="material-symbols-outlined folder-drag-handle" title="ドラッグして並び替え">drag_indicator</span>' : ''}
           <span class="material-symbols-outlined icon">${iconName}</span>
-          <span title="${label}">${label}</span>
+          <span title="${escapeHtml(label)}">${escapeHtml(label)}</span>
         </div>
         <div class="folder-item-right">
           <span class="folder-badge">${count}</span>
         </div>
       `;
       return li;
+    }
+
+    // ドラッグ＆ドロップによるプロジェクト並び替え実行
+    function reorderProjects(fromName, toName, insertBefore) {
+      const fromIdx = state.projects.findIndex(p => p.name === fromName);
+      if (fromIdx === -1) return;
+
+      const [movedProj] = state.projects.splice(fromIdx, 1);
+      let toIdx = state.projects.findIndex(p => p.name === toName);
+      if (toIdx === -1) {
+        state.projects.push(movedProj);
+      } else {
+        if (!insertBefore) toIdx += 1;
+        state.projects.splice(toIdx, 0, movedProj);
+      }
+
+      saveFolderOrder();
+      renderAll();
+      showToast(`フォルダ「${movedProj.name}」を移動しました ↕`);
     }
 
     function selectFolder(folderKey) {
@@ -2575,12 +2721,16 @@
     }
 
     // ナビゲーションレイル切り替え
-    // ナビゲーションレイル切り替え
     function setRailMode(mode) {
       state.railMode = mode;
       document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
       const activeBtn = document.getElementById(`rail-btn-${mode}`);
       if (activeBtn) activeBtn.classList.add('active');
+
+      const azBtn = document.getElementById('btn-sort-folders-az');
+      if (azBtn) {
+        azBtn.style.display = (mode === 'folders') ? 'inline-flex' : 'none';
+      }
 
       if (mode === 'calendar') {
         renderMiniCalendarSidebar();
