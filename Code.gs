@@ -632,7 +632,8 @@ function doPost(e) {
       result = getInitialData();
     } else if (action === 'saveTask') {
       const data = payload.taskData;
-      if (data && data.id) {
+      const isTempId = data && data.id && String(data.id).startsWith('tmp_');
+      if (data && data.id && !isTempId) {
         result = updateTaskFromApp(data);
       } else {
         result = addNewTaskFromApp(data);

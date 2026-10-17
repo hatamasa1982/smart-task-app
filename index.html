@@ -2411,14 +2411,20 @@
       // バックエンド通信
       try {
         setSyncStatus('保存中...', true);
-        const res = await callBackendApi('saveTask', { taskData: newTask });
-        if (res && res.id) {
+        const payloadTask = { ...newTask, id: '' };
+        const res = await callBackendApi('saveTask', { taskData: payloadTask });
+        if (res && res.tasks) {
+          state.tasks = res.tasks;
+          state.projects = res.projects || state.projects;
+          state.doneTasks = res.doneTasks || state.doneTasks;
+        } else if (res && res.id) {
           newTask.id = res.id;
         }
+        renderAll();
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('タスク追加エラー:', e);
-        showToast('保存に失敗しました');
+        showToast('保存に失敗しました: ' + (e.message || ''));
         setSyncStatus('エラー', false);
       }
     }
@@ -2531,6 +2537,7 @@
 
       const projSelect = document.getElementById('task-project-select');
       const selectedProj = state.projects.find(p => p.id === projSelect.value);
+      const isNewTask = !id || id.startsWith('tmp_');
 
       const taskData = {
         id: id || ('tmp_' + Date.now()),
@@ -2548,7 +2555,7 @@
 
       closeModal();
 
-      if (id) {
+      if (!isNewTask) {
         const idx = state.tasks.findIndex(t => t.id === id);
         if (idx !== -1) state.tasks[idx] = taskData;
       } else {
@@ -2556,15 +2563,27 @@
       }
 
       renderAll();
-      showToast('保存しました');
+      showToast('保存中...');
 
       try {
         setSyncStatus('保存中...', true);
-        await callBackendApi('saveTask', { taskData });
+        const payloadData = { ...taskData };
+        if (isNewTask) payloadData.id = ''; // 新規登録時はIDを空にして確実に新規追加APIを呼ぶ
+        const res = await callBackendApi('saveTask', { taskData: payloadData });
+        if (res && res.tasks) {
+          state.tasks = res.tasks;
+          state.projects = res.projects || state.projects;
+          state.doneTasks = res.doneTasks || state.doneTasks;
+        } else if (res && res.id) {
+          taskData.id = res.id;
+        }
+        renderAll();
+        showToast('保存しました');
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('保存エラー:', e);
-        showToast('保存に失敗しました');
+        showToast('保存に失敗しました: ' + (e.message || ''));
+        setSyncStatus('エラー', false);
       }
     }
 
