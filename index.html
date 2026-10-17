@@ -587,12 +587,12 @@
     /* 列幅の定義 */
     .col-check { width: 32px; text-align: center !important; }
     .col-star { width: 32px; text-align: center !important; }
-    .col-folder { width: 140px; }
+    .col-folder { width: 130px; }
     .col-task { min-width: 250px; }
-    .col-due { width: 110px; }
-    .col-priority { width: 85px; }
+    .col-due { width: 105px; }
     .col-context { width: 110px; }
-    .col-time { width: 95px; }
+    .col-start-time { width: 85px; }
+    .col-end-time { width: 85px; }
     .col-repeat { width: 75px; }
     .col-actions { width: 45px; text-align: center !important; }
 
@@ -1079,7 +1079,7 @@
       .sub-sidebar.open {
         transform: translateX(0);
       }
-      .col-folder, .col-repeat, .col-time {
+      .col-folder, .col-repeat, .col-start-time, .col-end-time {
         display: none;
       }
     }
@@ -1222,9 +1222,9 @@
               <th class="col-folder">Folder</th>
               <th class="col-task">Task</th>
               <th class="col-due">Due Date</th>
-              <th class="col-priority">Priority</th>
               <th class="col-context">Context</th>
-              <th class="col-time">Time</th>
+              <th class="col-start-time">開始時間</th>
+              <th class="col-end-time">終了時間</th>
               <th class="col-repeat">Repeat</th>
               <th class="col-actions"></th>
             </tr>
@@ -2053,19 +2053,19 @@
             ${dueText}
           </span>
         </td>
-        <td class="col-priority" id="task-priority-${task.id}">
-          <span class="task-priority-cell ${getPriorityClass(task)} editable-cell" onclick="startInlineEditPriority(event, '${task.id}')" title="クリックして優先度を変更">
-            ${getPriorityLabel(task)}
-          </span>
-        </td>
         <td class="col-context" id="task-context-${task.id}">
           <span class="task-context-cell editable-cell" onclick="startInlineEditContext(event, '${task.id}')" title="クリックしてコンテキストを変更">
             ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
           </span>
         </td>
-        <td class="col-time" id="task-time-${task.id}">
-          <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を変更" style="color: #64748b; font-size: 11.5px;">
+        <td class="col-start-time" id="task-start-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditStartTime(event, '${task.id}')" title="クリックして開始時間を変更" style="color: #64748b; font-size: 11.5px;">
             ${task.startTime ? task.startTime : '--:--'}
+          </span>
+        </td>
+        <td class="col-end-time" id="task-end-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditEndTime(event, '${task.id}')" title="クリックして終了時間を変更" style="color: #64748b; font-size: 11.5px;">
+            ${task.endTime ? task.endTime : '--:--'}
           </span>
         </td>
         <td class="col-repeat">
@@ -2245,16 +2245,16 @@
     }
 
     // 5. 開始時間のインライン編集
-    function startInlineEditTime(e, taskId) {
+    function startInlineEditStartTime(e, taskId) {
       e.stopPropagation();
-      const cell = document.getElementById(`task-time-${taskId}`);
+      const cell = document.getElementById(`task-start-${taskId}`);
       if (!cell || cell.querySelector('input')) return;
 
       const task = state.tasks.find(t => t.id === taskId);
       if (!task) return;
 
-      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-time-${taskId}" value="${task.startTime || ''}">`;
-      const input = document.getElementById(`input-time-${taskId}`);
+      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-start-${taskId}" value="${task.startTime || ''}">`;
+      const input = document.getElementById(`input-start-${taskId}`);
       input.focus();
 
       let isFinished = false;
@@ -2264,6 +2264,35 @@
         const newVal = input.value;
         if (save && newVal !== task.startTime) {
           updateTaskInline(taskId, { startTime: newVal });
+        } else {
+          renderTaskTable();
+        }
+      };
+
+      input.onchange = () => finish(true);
+      input.onblur = () => finish(true);
+    }
+
+    // 5-2. 終了時間のインライン編集
+    function startInlineEditEndTime(e, taskId) {
+      e.stopPropagation();
+      const cell = document.getElementById(`task-end-${taskId}`);
+      if (!cell || cell.querySelector('input')) return;
+
+      const task = state.tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      cell.innerHTML = `<input type="time" class="inline-edit-time" id="input-end-${taskId}" value="${task.endTime || ''}">`;
+      const input = document.getElementById(`input-end-${taskId}`);
+      input.focus();
+
+      let isFinished = false;
+      const finish = (save) => {
+        if (isFinished) return;
+        isFinished = true;
+        const newVal = input.value;
+        if (save && newVal !== task.endTime) {
+          updateTaskInline(taskId, { endTime: newVal });
         } else {
           renderTaskTable();
         }
