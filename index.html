@@ -1086,28 +1086,300 @@
       color: #ffffff;
     }
 
-    /* レスポンシブ (モバイル対応) */
+    /* ==================================
+       レスポンシブ (スマホ・タブレット最適化)
+    ================================== */
+    /* 背景オーバーレイ */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      top: 52px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+      z-index: 70;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .sidebar-backdrop.active {
+      display: block;
+      opacity: 1;
+    }
+
     @media (max-width: 768px) {
+      /* ヘッダーの最適化 */
+      .toodledo-header {
+        padding: 0 10px;
+        gap: 6px;
+      }
+      .logo-text span:last-child {
+        display: none; /* "Toodledo Style" をスマホでは隠してスッキリ */
+      }
       .menu-toggle-btn {
-        display: block;
+        display: inline-flex;
+        margin-right: 4px;
       }
+      .btn-add-task-top span:last-child {
+        display: none; /* "+ ADD TASK" のテキストを隠して "+" アイコンのみに */
+      }
+      .btn-add-task-top {
+        padding: 6px 10px;
+        border-radius: 50px;
+      }
+      .search-box {
+        width: 105px;
+        padding: 4px 6px;
+      }
+      .search-box:focus-within {
+        width: 130px;
+      }
+      #sync-status span:last-child {
+        display: none; /* "同期完了" テキストを隠して雲アイコンのみに */
+      }
+      .sync-status-indicator {
+        padding: 4px 6px;
+      }
+
+      /* ナビゲーションレイル（幅44pxでスマホ左端にスマート配置） */
       .nav-rail {
-        display: none;
+        width: 44px;
+        min-width: 44px;
       }
+      .rail-btn {
+        width: 36px;
+        height: 36px;
+      }
+
+      /* サブサイドバー（ドロワーとしてスライド表示） */
       .sub-sidebar {
         position: fixed;
         top: 52px;
-        left: 0;
+        left: 44px; /* レイルの右からスライドイン */
         bottom: 0;
+        width: 280px;
         z-index: 80;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 16px rgba(0,0,0,0.2);
+        transform: translateX(-120%);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.2);
+        background: #f8fafc;
       }
       .sub-sidebar.open {
         transform: translateX(0);
       }
-      .col-folder, .col-repeat, .col-time {
-        display: none;
+
+      /* メインコンテンツ */
+      .main-content {
+        padding: 0;
+        overflow-x: hidden;
+      }
+      .content-top-bar {
+        padding: 8px 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .content-top-right {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .quick-add-container {
+        margin: 6px 10px;
+        padding: 6px 10px;
+      }
+
+      /* ==================================
+         タスクテーブルの「カード型リスト」化
+      ================================== */
+      .task-table-container {
+        padding: 0 10px 24px 10px;
+      }
+      .toodledo-table {
+        display: block;
+        width: 100%;
+      }
+      .toodledo-table thead {
+        display: none; /* 表ヘッダーは非表示 */
+      }
+      .toodledo-table tbody {
+        display: block;
+        width: 100%;
+      }
+
+      /* グループ見出し */
+      .table-group-row {
+        display: block;
+        margin: 14px 0 6px 0;
+      }
+      .table-group-row td {
+        display: block;
+        width: 100% !important;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+
+      /* タスクカード */
+      .task-row {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        height: auto !important;
+        min-height: 50px !important;
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 9px 12px 10px 12px !important;
+        margin-bottom: 8px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+        position: relative !important;
+        gap: 6px 4px !important;
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+      }
+      .task-row:active {
+        background: #f8fafc !important;
+        transform: scale(0.99);
+      }
+      .task-row.completed {
+        opacity: 0.65;
+        background: #f8fafc !important;
+      }
+
+      /* すべてのtd属性をクリア */
+      .task-row td {
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 0 !important;
+        border: none !important;
+        overflow: visible !important;
+        white-space: normal !important;
+        height: auto !important;
+      }
+
+      /* スマホ時：未設定の項目（空バッジ）は非表示にして画面をスマートに */
+      .task-row td.empty-badge {
+        display: none !important;
+      }
+
+      /* 1段目：チェック・スター・タスク名・アクション */
+      .task-row td.col-check {
+        order: 1;
+        width: 26px !important;
+        min-width: 26px !important;
+      }
+      .task-row td.col-check input {
+        width: 18px;
+        height: 18px;
+      }
+      .task-row td.col-star {
+        order: 2;
+        width: 24px !important;
+        min-width: 24px !important;
+      }
+      .task-row td.col-task {
+        order: 3;
+        flex: 1 1 calc(100% - 150px) !important;
+        min-width: 130px !important;
+        padding-right: 4px;
+      }
+      .task-title-cell {
+        font-size: 13.5px !important;
+        font-weight: 600 !important;
+        color: #0f172a !important;
+        line-height: 1.45 !important;
+        word-break: break-word !important;
+      }
+
+      /* 操作アイコン（スマホでは常時表示） */
+      .task-row td.col-actions {
+        order: 4;
+        width: auto !important;
+        margin-left: auto !important;
+      }
+      .row-actions-group {
+        opacity: 1 !important;
+        gap: 4px !important;
+      }
+      .row-action-btn {
+        padding: 4px !important;
+        color: #64748b !important;
+      }
+      .row-action-btn span {
+        font-size: 17px !important;
+      }
+
+      /* 2段目：メタ情報バッジ（期日・時間・フォルダ・コンテキスト・リピート） */
+      .task-row td.col-due,
+      .task-row td.col-time,
+      .task-row td.col-folder,
+      .task-row td.col-context,
+      .task-row td.col-repeat {
+        order: 5;
+        width: auto !important;
+        margin-top: 3px !important;
+      }
+      /* 2段目の先頭インデント（チェックボックスとスターの下を空ける） */
+      .task-row td.col-due {
+        margin-left: 28px !important;
+      }
+
+      /* バッジ共通スタイル */
+      .task-due-cell,
+      .task-folder-cell,
+      .task-context-cell,
+      .task-row td.col-time span,
+      .task-row td.col-repeat span {
+        font-size: 11px !important;
+        padding: 2px 7px !important;
+        border-radius: 5px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 3px !important;
+        line-height: 1.3 !important;
+        white-space: nowrap !important;
+      }
+
+      .task-due-cell {
+        background: #f1f5f9;
+        color: #475569;
+        font-weight: 600;
+      }
+      .task-due-cell.today {
+        background: #fef3c7;
+        color: #b45309;
+      }
+      .task-due-cell.overdue {
+        background: #fee2e2;
+        color: #dc2626;
+      }
+      .task-folder-cell {
+        background: #f1f5f9;
+        color: #334155;
+      }
+      .task-context-cell {
+        background: #e0f2fe;
+        color: #0369a1;
+        font-weight: 600;
+      }
+      .task-row td.col-time span {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+      }
+      .task-row td.col-repeat span {
+        background: #f1f5f9;
+      }
+
+      /* モーダルをスマホ画面幅にフィット */
+      .modal-card {
+        width: 94% !important;
+        max-width: 440px;
+        max-height: 88vh;
+        border-radius: 12px;
+      }
+      .form-input, .form-select {
+        font-size: 15px;
       }
     }
   </style>
@@ -1155,6 +1427,9 @@
       </button>
     </div>
   </header>
+
+  <!-- スマホ用サイドバー背景オーバーレイ -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()"></div>
 
   <!-- アプリメインコンテナ -->
   <div class="app-container">
@@ -1769,6 +2044,7 @@
       state.selectedContext = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
+      if (window.innerWidth <= 768) closeSidebar();
       renderAll();
     }
 
@@ -1862,6 +2138,7 @@
       state.selectedFolder = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
+      if (window.innerWidth <= 768) closeSidebar();
       renderAll();
     }
 
@@ -2096,17 +2373,17 @@
             ${dueText}
           </span>
         </td>
-        <td class="col-context" id="task-context-${task.id}">
+        <td class="col-context ${getContextDisplayName(task.description) ? '' : 'empty-badge'}" id="task-context-${task.id}">
           <span class="task-context-cell editable-cell" onclick="startInlineEditContext(event, '${task.id}')" title="クリックしてコンテキストを変更">
             ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
           </span>
         </td>
-        <td class="col-time" id="task-time-${task.id}">
+        <td class="col-time ${(task.startTime || task.endTime) ? '' : 'empty-badge'}" id="task-time-${task.id}">
           <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を編集" style="color: #64748b; font-size: 11.5px; font-variant-numeric: tabular-nums;">
             ${formatTimeRange(task.startTime, task.endTime)}
           </span>
         </td>
-        <td class="col-repeat" id="task-repeat-${task.id}">
+        <td class="col-repeat ${(task.repeat && task.repeat !== 'None') ? '' : 'empty-badge'}" id="task-repeat-${task.id}">
           <span class="editable-cell" onclick="startInlineEditRepeat(event, '${task.id}')" title="クリックしてリピート設定を変更" style="color: ${task.repeat && task.repeat !== 'None' ? '#0369a1' : '#94a3b8'}; font-size: 11.5px; font-weight: ${task.repeat && task.repeat !== 'None' ? '600' : 'normal'};">
             ${task.repeat || 'None'}
           </span>
@@ -2565,6 +2842,7 @@
     // モーダル操作
     // ----------------------------------
     function openAddModal() {
+      if (window.innerWidth <= 768) closeSidebar();
       document.getElementById('modal-title').innerText = '新規タスクを作成';
       document.getElementById('task-id-input').value = '';
       document.getElementById('task-title-input').value = '';
@@ -2927,6 +3205,9 @@
       }
       renderBreadcrumb();
       renderTaskTable();
+      if (window.innerWidth <= 768) {
+        openSidebar();
+      }
     }
 
     // カレンダー月移動
@@ -3048,6 +3329,7 @@
       state.selectedDate = dateStr;
       state.selectedFolder = 'All';
       state.selectedContext = 'All';
+      if (window.innerWidth <= 768) closeSidebar();
       renderBreadcrumb();
       renderTaskTable();
       renderMiniCalendarSidebar();
@@ -3062,13 +3344,32 @@
 
     function toggleCompletedTasksView() {
       state.showCompleted = !state.showCompleted;
+      if (window.innerWidth <= 768) closeSidebar();
       renderBreadcrumb();
       renderTaskTable();
     }
 
+    function openSidebar() {
+      const sb = document.getElementById('sub-sidebar');
+      const bd = document.getElementById('sidebar-backdrop');
+      if (sb) sb.classList.add('open');
+      if (bd) bd.classList.add('active');
+    }
+
+    function closeSidebar() {
+      const sb = document.getElementById('sub-sidebar');
+      const bd = document.getElementById('sidebar-backdrop');
+      if (sb) sb.classList.remove('open');
+      if (bd) bd.classList.remove('active');
+    }
+
     function toggleSidebar() {
       const sb = document.getElementById('sub-sidebar');
-      if (sb) sb.classList.toggle('open');
+      if (sb && sb.classList.contains('open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
     }
 
     function resetFilters() {
