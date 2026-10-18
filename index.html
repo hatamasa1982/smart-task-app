@@ -617,11 +617,15 @@
       width: 44px;
       text-align: center;
     }
-    /* 時計ピッカーアイコンを非表示 */
-    .inline-time-container input[type="time"]::-webkit-calendar-picker-indicator {
+    /* 時計ピッカーアイコンを非表示（インライン時間入力 & モーダル内） */
+    .inline-time-container input[type="time"]::-webkit-calendar-picker-indicator,
+    .form-input[type="time"]::-webkit-calendar-picker-indicator,
+    #task-start-input::-webkit-calendar-picker-indicator,
+    #task-end-input::-webkit-calendar-picker-indicator {
       display: none !important;
       -webkit-appearance: none;
     }
+
 
     /* グループ見出し行（Due in the past, Today など） */
     .table-group-row td {
@@ -2269,12 +2273,28 @@
         // 名前順（全体）
         groups['all'] = { label: 'All Tasks (Alphabetical)', icon: 'sort_by_alpha', list: [...taskList].sort((a,b)=>(a.task||'').localeCompare(b.task||'')) };
       } else {
-        // デフォルト: 期日別グループ化 (Due in the past, Today, Tomorrow, Upcoming, No Date)
+        // デフォルト: 期日別グループ化 (Due in the past, Today, Tomorrow, 2〜7日後, 8日以降, No Date)
         const todayStr = getTodayString();
+        const tomorrowStr = getOffsetDateString(1);
+        const day7Str = getOffsetDateString(7);
+
         groups.past = { label: 'Due in the past', icon: 'warning', list: [] };
-        groups.today = { label: 'Today', icon: 'today', list: [] };
-        groups.tomorrow = { label: 'Tomorrow', icon: 'event', list: [] };
-        groups.upcoming = { label: 'Upcoming', icon: 'calendar_month', list: [] };
+        groups.today = { label: `Today (${formatMonthDayWithDayOfWeek(todayStr)})`, icon: 'today', list: [] };
+        groups.tomorrow = { label: `Tomorrow (${formatMonthDayWithDayOfWeek(tomorrowStr)})`, icon: 'event', list: [] };
+
+        const daysMap = {};
+        for (let i = 2; i <= 7; i++) {
+          const dStr = getOffsetDateString(i);
+          const key = `day_${i}`;
+          groups[key] = {
+            label: `${i}日後 (${formatMonthDayWithDayOfWeek(dStr)})`,
+            icon: 'event',
+            list: []
+          };
+          daysMap[dStr] = key;
+        }
+
+        groups.later = { label: '8日以降 (Later)', icon: 'calendar_month', list: [] };
         groups.nodate = { label: 'No Due Date', icon: 'help_outline', list: [] };
 
         taskList.forEach(t => {
@@ -2284,10 +2304,12 @@
             groups.past.list.push(t);
           } else if (t.date === todayStr) {
             groups.today.list.push(t);
+          } else if (t.date === tomorrowStr) {
+            groups.tomorrow.list.push(t);
+          } else if (daysMap[t.date]) {
+            groups[daysMap[t.date]].list.push(t);
           } else {
-            const tmrw = getOffsetDateString(1);
-            if (t.date === tmrw) groups.tomorrow.list.push(t);
-            else groups.upcoming.list.push(t);
+            groups.later.list.push(t);
           }
         });
       }
@@ -3493,6 +3515,22 @@
       }
       return dateStr;
     }
+
+    // 日付文字列 (YYYY-MM-DD) を "M/D 曜日" 形式でフォーマット（例: 10/20 火）
+    function formatMonthDayWithDayOfWeek(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+        const m = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        const dow = dayNames[d.getDay()];
+        return `${m}/${day} ${dow}`;
+      }
+      return dateStr;
+    }
+
 
     // 期日および開始時間によるタスクの並び替え（第1優先: 期日、第2優先: 開始時間、未設定は末尾）
     function compareTasksByDateAndTime(a, b) {
