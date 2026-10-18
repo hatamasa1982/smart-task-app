@@ -3003,9 +3003,24 @@
       const name = prompt('新しいフォルダ（プロジェクト）名を入力してください:');
       if (!name || !name.trim()) return;
 
+      const trimmedName = name.trim();
+
+      // 重複チェック（完全一致および【】の有無などの表記揺れ対応）
+      const normalize = s => (s || '').replace(/^[【\[\s]+|[】\]\s]+$/g, '').trim().toLowerCase();
+      const inputNorm = normalize(trimmedName);
+
+      const exists = (state.projects || []).some(p => {
+        return normalize(p.name) === inputNorm;
+      });
+
+      if (exists) {
+        alert(`フォルダ「${trimmedName}」は既に存在しています。別の名前を入力してください。`);
+        return;
+      }
+
       const newProj = {
         id: 'p_' + Date.now(),
-        name: name.trim(),
+        name: trimmedName,
         type: 'Biz'
       };
 

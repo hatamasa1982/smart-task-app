@@ -1010,6 +1010,17 @@ function addNewProjectFromApp(projectData) {
   if (!sheet) throw new Error("プロジェクトシートが見つかりません。");
   
   const lastRow = sheet.getLastRow();
+  const newName = (projectData.name || "").trim();
+  if (!newName) throw new Error("プロジェクト名が空です。");
+  
+  // 既存の同名プロジェクト重複チェック
+  if (lastRow >= 2) {
+    const existingNames = sheet.getRange(2, 2, lastRow - 1, 1).getValues().map(r => String(r[0]).trim());
+    if (existingNames.includes(newName)) {
+      return getInitialData(); // 既に存在する場合は二重追加せず最新データを返す
+    }
+  }
+
   let newId = 100;
   if (lastRow >= 2) {
     const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(row => Number(row[0])).filter(val => !isNaN(val));
@@ -1020,8 +1031,8 @@ function addNewProjectFromApp(projectData) {
   
   const targetRow = lastRow + 1;
   sheet.getRange(targetRow, 1).setValue(newId);
-  sheet.getRange(targetRow, 2).setValue(projectData.name);
-  sheet.getRange(targetRow, 3).setValue(projectData.type || "Private");
+  sheet.getRange(targetRow, 2).setValue(newName);
+  sheet.getRange(targetRow, 3).setValue(projectData.type || "Biz");
   
   SpreadsheetApp.flush();
   return getInitialData();
