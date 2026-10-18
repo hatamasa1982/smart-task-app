@@ -589,7 +589,7 @@
     .col-star { width: 32px; text-align: center !important; }
     .col-folder { width: 130px; }
     .col-task { min-width: 250px; }
-    .col-due { width: 125px; }
+    .col-due { width: 140px; }
     .col-context { width: 110px; }
     .col-time { width: 125px; }
     .col-repeat { width: 75px; }
@@ -667,6 +667,10 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       vertical-align: middle;
+    }
+    .task-row td.col-due {
+      padding: 4px;
+      overflow: visible;
     }
 
     /* チェックボックス */
@@ -986,6 +990,7 @@
     }
     .inline-edit-date {
       width: 100%;
+      min-width: 130px;
       cursor: pointer;
     }
 
