@@ -608,7 +608,13 @@ function handleApiAction(action, payload) {
   } else if (action === 'deleteTask') {
     result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
   } else if (action === 'saveProject') {
-    result = addNewProjectFromApp(payload.projectData);
+    if (payload.projectData && payload.projectData.id) {
+      result = updateProjectFromApp(payload.projectData.id, payload.projectData.name);
+    } else {
+      result = addNewProjectFromApp(payload.projectData);
+    }
+  } else if (action === 'deleteProject') {
+    result = deleteProjectFromApp(payload.projectId, payload.projectName);
   } else if (action === 'saveContext') {
     result = saveContextFromApp(payload.contextData);
   } else if (action === 'deleteContext') {
@@ -1034,6 +1040,75 @@ function addNewProjectFromApp(projectData) {
   sheet.getRange(targetRow, 2).setValue(newName);
   sheet.getRange(targetRow, 3).setValue(projectData.type || "Biz");
   
+  SpreadsheetApp.flush();
+  return getInitialData();
+}
+
+/**
+ * アプリからプロジェクト（フォルダ）名を更新
+ */
+function updateProjectFromApp(projectId, newName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
+  if (!sheet) throw new Error("プロジェクトシートが見つかりません。");
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("プロジェクトが存在しません。");
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  let foundRow = -1;
+  let oldName = "";
+
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim() === String(projectId).trim()) {
+      foundRow = i + 2;
+      oldName = String(values[i][1]).trim();
+      break;
+    }
+  }
+
+  // IDで見つからない場合は名前で検索
+  if (foundRow === -1) {
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][1]).trim() === String(projectId).trim()) {
+        foundRow = i + 2;
+        oldName = String(values[i][1]).trim();
+        break;
+      }
+    }
+  }
+
+  if (foundRow !== -1 && newName && String(newName).trim() !== "") {
+    const trimmedNewName = String(newName).trim();
+    sheet.getRange(foundRow, 2).setValue(trimmedNewName);
+    if (oldName && oldName !== trimmedNewName) {
+      syncProjectNameChange(ss, oldName, trimmedNewName);
+    }
+  }
+
+  SpreadsheetApp.flush();
+  return getInitialData();
+}
+
+/**
+ * アプリからプロジェクト（フォルダ）を削除
+ */
+function deleteProjectFromApp(projectId, projectName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
+  if (!sheet) throw new Error("プロジェクトシートが見つかりません。");
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return getInitialData();
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim() === String(projectId).trim() || String(values[i][1]).trim() === String(projectName).trim()) {
+      sheet.deleteRow(i + 2);
+      break;
+    }
+  }
+
   SpreadsheetApp.flush();
   return getInitialData();
 }

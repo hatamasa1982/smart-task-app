@@ -657,8 +657,17 @@
     }
 
     .task-row.completed {
-      opacity: 0.55;
-      background: #fafafa;
+      opacity: 0.65;
+      background: rgba(248, 250, 252, 0.8);
+    }
+    .task-row.completed td {
+      color: #94a3b8 !important;
+    }
+    .task-row.completed .task-folder-cell,
+    .task-row.completed .task-due-cell,
+    .task-row.completed .task-context-cell {
+      color: #94a3b8 !important;
+      background: transparent !important;
     }
 
     .task-row td {
@@ -1032,20 +1041,25 @@
     .folder-action-btn {
       background: none;
       border: none;
-      color: #94a3b8;
+      color: #64748b;
       cursor: pointer;
-      padding: 1px;
-      display: none;
-      border-radius: 3px;
-      font-size: 14px;
+      padding: 2px 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 13px;
       line-height: 1;
+      opacity: 0.55;
+      transition: all 0.15s ease;
     }
     .folder-item:hover .folder-action-btn {
-      display: inline-flex;
+      opacity: 0.9;
     }
     .folder-action-btn:hover {
-      color: #1e293b;
-      background: #e2e8f0;
+      color: #0284c7 !important;
+      background: #e0f2fe;
+      opacity: 1 !important;
     }
 
     /* カレンダーナビゲーション */
@@ -1395,6 +1409,148 @@
         font-size: 15px;
       }
     }
+
+    /* 月曜始まりカスタム日付ピッカー */
+    .custom-datepicker-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(2px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .custom-datepicker-overlay.active {
+      display: flex;
+    }
+    .custom-datepicker-card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+      border: 1px solid #cbd5e1;
+      width: 320px;
+      padding: 16px;
+      user-select: none;
+      animation: modalFadeIn 0.15s ease-out;
+    }
+    .custom-datepicker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .custom-datepicker-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: #1e293b;
+    }
+    .custom-datepicker-nav {
+      display: flex;
+      gap: 6px;
+    }
+    .custom-datepicker-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #475569;
+      transition: all 0.1s;
+    }
+    .custom-datepicker-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .custom-datepicker-quick-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .custom-datepicker-quick-btn {
+      flex: 1;
+      padding: 5px 0;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.1s;
+    }
+    .custom-datepicker-quick-btn:hover {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+      color: #0369a1;
+    }
+    .custom-datepicker-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      text-align: center;
+    }
+    .custom-datepicker-day-header {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 0;
+      color: #64748b;
+    }
+    .custom-datepicker-day-header.sat {
+      color: #2563eb;
+    }
+    .custom-datepicker-day-header.sun {
+      color: #dc2626;
+    }
+    .custom-datepicker-cell {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #1e293b;
+      transition: all 0.1s;
+      font-variant-numeric: tabular-nums;
+    }
+    .custom-datepicker-cell:hover:not(.empty) {
+      background: #e2e8f0;
+    }
+    .custom-datepicker-cell.sat {
+      color: #2563eb;
+    }
+    .custom-datepicker-cell.sun {
+      color: #dc2626;
+    }
+    .custom-datepicker-cell.today {
+      background: #e0f2fe;
+      color: #0369a1;
+      font-weight: 700;
+      border: 1px solid #7dd3fc;
+    }
+    .custom-datepicker-cell.selected {
+      background: #0284c7 !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+    .custom-datepicker-cell.empty {
+      cursor: default;
+    }
+    .custom-datepicker-footer {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -1593,7 +1749,12 @@
         <!-- 期日 -->
         <div class="form-group">
           <label class="form-label" for="task-date-input">期日 (Due Date)</label>
-          <input type="date" id="task-date-input" class="form-input">
+          <div style="position: relative; display: flex; align-items: center;">
+            <input type="text" id="task-date-input" class="form-input" placeholder="日付を選択 (月曜始まり)" readonly onclick="openDatePickerForModal()" style="cursor: pointer; background: #fff; padding-right: 36px;">
+            <button type="button" onclick="openDatePickerForModal()" style="position: absolute; right: 8px; background: none; border: none; cursor: pointer; color: #64748b; display: flex; align-items: center;" title="カレンダーを開く">
+              <span class="material-symbols-outlined" style="font-size: 20px;">calendar_month</span>
+            </button>
+          </div>
         </div>
 
         <!-- 時間（開始・終了） -->
@@ -1661,6 +1822,33 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="testConnection()">接続テスト</button>
         <button class="btn btn-primary" onclick="saveSettingsUrl()">保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 月曜始まりカスタム日付ピッカー ==================== -->
+  <div id="custom-datepicker" class="custom-datepicker-overlay" onclick="closeDatePickerOnOverlay(event)">
+    <div class="custom-datepicker-card" onclick="event.stopPropagation()">
+      <div class="custom-datepicker-header">
+        <span class="custom-datepicker-title" id="custom-dp-month-title">2026年 10月</span>
+        <div class="custom-datepicker-nav">
+          <button class="custom-datepicker-btn" onclick="navDatePickerMonth(-1)" title="前月">◀</button>
+          <button class="custom-datepicker-btn" onclick="navDatePickerToday()" title="今月">今</button>
+          <button class="custom-datepicker-btn" onclick="navDatePickerMonth(1)" title="翌月">▶</button>
+        </div>
+      </div>
+      <div class="custom-datepicker-quick-bar">
+        <button class="custom-datepicker-quick-btn" onclick="selectQuickDate('today')">今日</button>
+        <button class="custom-datepicker-quick-btn" onclick="selectQuickDate('tomorrow')">明日</button>
+        <button class="custom-datepicker-quick-btn" onclick="selectQuickDate('nextWeek')">来週</button>
+        <button class="custom-datepicker-quick-btn" onclick="selectQuickDate('clear')" style="color: #ef4444;">なし</button>
+      </div>
+      <div class="custom-datepicker-grid" id="custom-dp-grid">
+        <!-- JSで月曜始まり（月〜日）の日付を描画 -->
+      </div>
+      <div class="custom-datepicker-footer">
+        <span style="font-size: 11px; color: #94a3b8;">📅 月曜始まり</span>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick="closeDatePicker()">閉じる</button>
       </div>
     </div>
   </div>
@@ -1733,7 +1921,11 @@
             }
             else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId);
             else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId);
-            else if (action === 'saveProject') api.addNewProjectFromApp(payload.projectData);
+            else if (action === 'saveProject') {
+              if (payload.projectData && payload.projectData.id) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name);
+              else api.addNewProjectFromApp(payload.projectData);
+            }
+            else if (action === 'deleteProject') api.deleteProjectFromApp(payload.projectId, payload.projectName);
             else if (action === 'saveContext') api.saveContextFromApp(payload.contextData);
             else if (action === 'deleteContext') api.deleteContextFromApp(payload.contextId);
             else reject(new Error('未対応のアクションです: ' + action));
@@ -1855,14 +2047,63 @@
     }
 
     // キャッシュ読み込み
+    // --- 本日完了タスクの永続化管理 ---
+    const COMPLETED_TODAY_KEY = 'smart_tasks_completed_today';
+
+    function getCompletedTodaySet() {
+      try {
+        const raw = localStorage.getItem(COMPLETED_TODAY_KEY);
+        if (!raw) return new Set();
+        const obj = JSON.parse(raw);
+        if (obj && obj.date === getTodayString() && Array.isArray(obj.ids)) {
+          return new Set(obj.ids);
+        }
+      } catch (e) {}
+      return new Set();
+    }
+
+    function addCompletedTodayId(id) {
+      const set = getCompletedTodaySet();
+      set.add(id);
+      localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
+        date: getTodayString(),
+        ids: Array.from(set)
+      }));
+    }
+
+    function removeCompletedTodayId(id) {
+      const set = getCompletedTodaySet();
+      set.delete(id);
+      localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
+        date: getTodayString(),
+        ids: Array.from(set)
+      }));
+    }
+
+    function saveToCache() {
+      try {
+        localStorage.setItem(CACHE_DATA_KEY, JSON.stringify({
+          tasks: state.tasks,
+          projects: state.projects,
+          doneTasks: state.doneTasks,
+          contexts: state.contexts
+        }));
+      } catch (e) {
+        console.warn('キャッシュ保存エラー:', e);
+      }
+    }
+
+    // キャッシュ読み込み
     function loadCachedData() {
       try {
         const cached = localStorage.getItem(CACHE_DATA_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.tasks) {
+            const completedTodayIds = getCompletedTodaySet();
             state.tasks = (parsed.tasks || []).map(t => {
               if (t.description) t.description = getContextDisplayName(t.description);
+              if (t.status && completedTodayIds.has(t.id)) t.completedDate = getTodayString();
               return t;
             });
             state.projects = applySavedFolderOrder(parsed.projects || []);
@@ -1871,6 +2112,14 @@
               return t;
             });
             state.contexts = (parsed.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
+
+            // doneTasksの中で今日完了したタスクがあり、state.tasksにまだ無ければ合流
+            state.doneTasks.forEach(dt => {
+              if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
+                state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
+              }
+            });
+
             renderAll();
           }
         }
@@ -1885,6 +2134,7 @@
       try {
         const data = await callBackendApi('getInitialData');
         if (data) {
+          const completedTodayIds = getCompletedTodaySet();
           state.tasks = (data.tasks || []).map(t => {
             if (t.description) t.description = getContextDisplayName(t.description);
             return t;
@@ -1895,7 +2145,15 @@
             return t;
           });
           state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
-          localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(data));
+
+          // doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
+          state.doneTasks.forEach(dt => {
+            if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
+              state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
+            }
+          });
+
+          saveToCache();
           renderAll();
           setSyncStatus('同期完了', false);
         }
@@ -1954,7 +2212,7 @@
 
       // 1. All Tasks
       const allCount = state.tasks.filter(t => !t.status).length;
-      list.appendChild(createFolderItem('All', 'All Tasks', allCount, 'inbox', false));
+      list.appendChild(createFolderItem('All', 'All Tasks', allCount, 'inbox', false, null));
 
       // 2. 有効なプロジェクトのみを対象（空名フォルダは完全除外）
       const validProjects = state.projects.filter(p => p && p.name && String(p.name).trim() !== '');
@@ -1963,15 +2221,15 @@
       validProjects.forEach(p => {
         const count = state.tasks.filter(t => !t.status && (t.projectName === p.name || t.projectId === p.id)).length;
         const isInbox = p.name.includes('inbox') || p.name.includes('インボックス');
-        list.appendChild(createFolderItem(p.name, p.name, count, isInbox ? 'mail' : 'folder', true));
+        list.appendChild(createFolderItem(p.name, p.name, count, isInbox ? 'mail' : 'folder', true, p.id));
       });
 
       // 4. No Folder (未分類)
       const noFolderCount = state.tasks.filter(t => !t.status && !t.projectName && !t.projectId).length;
-      list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off', false));
+      list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off', false, null));
     }
 
-    function createFolderItem(folderKey, label, count, iconName, isDraggable = false) {
+    function createFolderItem(folderKey, label, count, iconName, isDraggable = false, projectId = null) {
       const li = document.createElement('li');
       li.className = 'folder-item' + (state.selectedFolder === folderKey ? ' active' : '') + (isDraggable ? ' draggable' : '');
       li.onclick = () => selectFolder(folderKey);
@@ -2020,6 +2278,11 @@
         };
       }
 
+      const hasActions = (folderKey !== 'All' && folderKey !== 'No Folder');
+      if (hasActions) {
+        li.ondblclick = (e) => promptEditProject(projectId || '', folderKey, e);
+      }
+
       li.innerHTML = `
         <div class="folder-item-left">
           ${isDraggable ? '<span class="material-symbols-outlined folder-drag-handle" title="ドラッグして並び替え">drag_indicator</span>' : ''}
@@ -2028,6 +2291,14 @@
         </div>
         <div class="folder-item-right">
           <span class="folder-badge">${count}</span>
+          ${hasActions ? `
+            <button class="folder-action-btn" onclick="promptEditProject('${projectId || ''}', '${escapeHtml(folderKey)}', event)" title="フォルダ名を編集">
+              <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
+            </button>
+            <button class="folder-action-btn" onclick="confirmDeleteProject('${projectId || ''}', '${escapeHtml(folderKey)}', event)" title="削除" style="color: #ef4444;">
+              <span class="material-symbols-outlined" style="font-size: 14px;">delete</span>
+            </button>
+          ` : ''}
         </div>
       `;
       return li;
@@ -2050,6 +2321,85 @@
       saveFolderOrder();
       renderAll();
       showToast(`フォルダ「${movedProj.name}」を移動しました ↕`);
+    }
+
+    // フォルダ（プロジェクト）編集ダイアログ
+    async function promptEditProject(projectId, currentName, e) {
+      if (e) e.stopPropagation();
+      const newName = prompt('フォルダ名を編集してください:', currentName);
+      if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+      const trimmed = newName.trim();
+
+      // 1. state.projects の名前更新
+      const p = state.projects.find(proj => (proj.id && String(proj.id) === String(projectId)) || proj.name === currentName);
+      const projId = p ? p.id : projectId;
+      if (p) p.name = trimmed;
+
+      // 2. タスク一覧内の projectName を更新
+      state.tasks.forEach(t => {
+        if (t.projectName === currentName || (t.projectId && String(t.projectId) === String(projId))) {
+          t.projectName = trimmed;
+        }
+      });
+      state.doneTasks.forEach(t => {
+        if (t.projectName === currentName || (t.projectId && String(t.projectId) === String(projId))) {
+          t.projectName = trimmed;
+        }
+      });
+
+      if (state.selectedFolder === currentName) {
+        state.selectedFolder = trimmed;
+      }
+
+      saveFolderOrder();
+      renderAll();
+      showToast(`フォルダ名を「${trimmed}」に更新しました 📁`);
+
+      try {
+        setSyncStatus('保存中...', true);
+        await callBackendApi('saveProject', { projectData: { id: projId, name: trimmed } });
+        setSyncStatus('同期完了', false);
+      } catch (err) {
+        console.error('フォルダ更新エラー:', err);
+        showToast('フォルダ更新の同期に失敗しました');
+      }
+    }
+
+    // フォルダ（プロジェクト）削除ダイアログ
+    async function confirmDeleteProject(projectId, currentName, e) {
+      if (e) e.stopPropagation();
+      if (!confirm(`フォルダ「${currentName}」を削除しますか？\n（※既存タスクは「No Folder」として残ります）`)) return;
+
+      const p = state.projects.find(proj => (proj.id && String(proj.id) === String(projectId)) || proj.name === currentName);
+      const projId = p ? p.id : projectId;
+
+      state.projects = state.projects.filter(proj => proj.name !== currentName && String(proj.id) !== String(projId));
+
+      // 該当タスクのフォルダを解除
+      state.tasks.forEach(t => {
+        if (t.projectName === currentName || String(t.projectId) === String(projId)) {
+          t.projectName = '';
+          t.projectId = '';
+        }
+      });
+
+      if (state.selectedFolder === currentName) {
+        state.selectedFolder = 'All';
+      }
+
+      saveFolderOrder();
+      renderAll();
+      showToast(`フォルダ「${currentName}」を削除しました 🗑️`);
+
+      try {
+        setSyncStatus('削除中...', true);
+        await callBackendApi('deleteProject', { projectId: projId, projectName: currentName });
+        setSyncStatus('同期完了', false);
+      } catch (err) {
+        console.error('フォルダ削除エラー:', err);
+        showToast('フォルダ削除の同期に失敗しました');
+      }
     }
 
     function selectFolder(folderKey) {
@@ -2308,7 +2658,13 @@
 
         taskList.forEach(t => {
           if (!t.date) {
-            groups.nodate.list.push(t);
+            if (t.status && t.completedDate === todayStr) {
+              groups.today.list.push(t);
+            } else {
+              groups.nodate.list.push(t);
+            }
+          } else if (t.status && t.completedDate === todayStr && t.date <= todayStr) {
+            groups.today.list.push(t);
           } else if (t.date < todayStr) {
             groups.past.list.push(t);
           } else if (t.date === todayStr) {
@@ -2471,38 +2827,169 @@
       input.onblur = () => finish(true);
     }
 
-    // 2. 期日のインライン編集
+    // ----------------------------------
+    // 月曜始まりカスタム日付ピッカー
+    // ----------------------------------
+    let datePickerState = {
+      isOpen: false,
+      year: new Date().getFullYear(),
+      month: new Date().getMonth(),
+      selectedDate: '',
+      callback: null
+    };
+
+    function openDatePicker(currentDate, callback) {
+      datePickerState.isOpen = true;
+      datePickerState.selectedDate = currentDate || '';
+      datePickerState.callback = callback;
+
+      if (currentDate && /^\d{4}-\d{2}-\d{2}$/.test(currentDate)) {
+        const parts = currentDate.split('-');
+        datePickerState.year = parseInt(parts[0], 10);
+        datePickerState.month = parseInt(parts[1], 10) - 1;
+      } else {
+        const now = new Date();
+        datePickerState.year = now.getFullYear();
+        datePickerState.month = now.getMonth();
+      }
+
+      renderDatePickerGrid();
+      const el = document.getElementById('custom-datepicker');
+      if (el) el.classList.add('active');
+    }
+
+    function closeDatePicker() {
+      datePickerState.isOpen = false;
+      datePickerState.callback = null;
+      const el = document.getElementById('custom-datepicker');
+      if (el) el.classList.remove('active');
+    }
+
+    function closeDatePickerOnOverlay(e) {
+      if (e.target.id === 'custom-datepicker') {
+        closeDatePicker();
+      }
+    }
+
+    function navDatePickerMonth(delta) {
+      datePickerState.month += delta;
+      if (datePickerState.month < 0) {
+        datePickerState.month = 11;
+        datePickerState.year -= 1;
+      } else if (datePickerState.month > 11) {
+        datePickerState.month = 0;
+        datePickerState.year += 1;
+      }
+      renderDatePickerGrid();
+    }
+
+    function navDatePickerToday() {
+      const now = new Date();
+      datePickerState.year = now.getFullYear();
+      datePickerState.month = now.getMonth();
+      renderDatePickerGrid();
+    }
+
+    function selectQuickDate(type) {
+      let result = '';
+      if (type === 'today') {
+        result = getTodayString();
+      } else if (type === 'tomorrow') {
+        result = getOffsetDateString(1);
+      } else if (type === 'nextWeek') {
+        result = getOffsetDateString(7);
+      } else if (type === 'clear') {
+        result = '';
+      }
+      if (datePickerState.callback) {
+        datePickerState.callback(result);
+      }
+      closeDatePicker();
+    }
+
+    function selectDatePickerDate(dateStr) {
+      if (datePickerState.callback) {
+        datePickerState.callback(dateStr);
+      }
+      closeDatePicker();
+    }
+
+    function renderDatePickerGrid() {
+      const titleEl = document.getElementById('custom-dp-month-title');
+      const gridEl = document.getElementById('custom-dp-grid');
+      if (!titleEl || !gridEl) return;
+
+      const y = datePickerState.year;
+      const m = datePickerState.month;
+      const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+      titleEl.innerText = `${y}年 ${monthNames[m]}`;
+
+      // 月曜始まり曜日ヘッダー
+      let html = `
+        <div class="custom-datepicker-day-header">月</div>
+        <div class="custom-datepicker-day-header">火</div>
+        <div class="custom-datepicker-day-header">水</div>
+        <div class="custom-datepicker-day-header">木</div>
+        <div class="custom-datepicker-day-header">金</div>
+        <div class="custom-datepicker-day-header sat">土</div>
+        <div class="custom-datepicker-day-header sun">日</div>
+      `;
+
+      // 月曜始まりのオフセット計算 (0:月, 1:火, ... 5:土, 6:日)
+      const rawFirstDay = new Date(y, m, 1).getDay();
+      const firstDay = (rawFirstDay + 6) % 7;
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      const todayStr = getTodayString();
+
+      // 先頭の空白
+      for (let i = 0; i < firstDay; i++) {
+        html += `<div class="custom-datepicker-cell empty"></div>`;
+      }
+
+      // 日付セル
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayOfWeek = (firstDay + d - 1) % 7;
+        const isSat = (dayOfWeek === 5);
+        const isSun = (dayOfWeek === 6);
+        const isToday = (dStr === todayStr);
+        const isSelected = (dStr === datePickerState.selectedDate);
+
+        let cellClasses = 'custom-datepicker-cell';
+        if (isSat) cellClasses += ' sat';
+        if (isSun) cellClasses += ' sun';
+        if (isToday) cellClasses += ' today';
+        if (isSelected) cellClasses += ' selected';
+
+        html += `
+          <div class="${cellClasses}" onclick="selectDatePickerDate('${dStr}')">
+            ${d}
+          </div>
+        `;
+      }
+
+      gridEl.innerHTML = html;
+    }
+
+    function openDatePickerForModal() {
+      const input = document.getElementById('task-date-input');
+      const currentVal = input ? input.value : '';
+      openDatePicker(currentVal, (newDate) => {
+        if (input) input.value = newDate;
+      });
+    }
+
+    // 2. 期日のインライン編集（月曜始まりカスタムピッカー）
     function startInlineEditDue(e, taskId) {
       e.stopPropagation();
-      const cell = document.getElementById(`task-due-${taskId}`);
-      if (!cell || cell.querySelector('input')) return;
-
-      const task = state.tasks.find(t => t.id === taskId);
+      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
       if (!task) return;
 
-      const currentVal = task.date || '';
-      cell.innerHTML = `<input type="date" class="inline-edit-date" id="input-due-${taskId}" value="${currentVal}">`;
-      const input = document.getElementById(`input-due-${taskId}`);
-      input.focus();
-
-      let isFinished = false;
-      const finish = (save) => {
-        if (isFinished) return;
-        isFinished = true;
-        const newVal = input.value;
-        if (save && newVal !== currentVal) {
-          updateTaskInline(taskId, { date: newVal });
-        } else {
-          renderTaskTable();
+      openDatePicker(task.date || '', (newDate) => {
+        if (newDate !== (task.date || '')) {
+          updateTaskInline(taskId, { date: newDate });
         }
-      };
-
-      // Enterキーで確定、Escapeでキャンセル、枠外クリック（blur）で確定
-      input.onkeydown = (ev) => {
-        if (ev.key === 'Enter') finish(true);
-        else if (ev.key === 'Escape') finish(false);
-      };
-      input.onblur = () => finish(true);
+      });
     }
 
     // 3. フォルダ（プロジェクト）のインライン編集
@@ -2826,21 +3313,47 @@
 
     // 完了ステータス切り替え
     async function handleToggleStatus(taskId) {
-      const taskIndex = state.tasks.findIndex(t => t.id === taskId);
-      if (taskIndex === -1) return;
+      let task = state.tasks.find(t => t.id === taskId);
+      if (!task) {
+        task = state.doneTasks.find(t => t.id === taskId);
+      }
+      if (!task) return;
 
-      const task = state.tasks[taskIndex];
-      task.status = true;
+      const newStatus = !task.status;
+      task.status = newStatus;
 
-      // 楽観的更新
-      state.tasks.splice(taskIndex, 1);
-      state.doneTasks.unshift(task);
+      if (newStatus) {
+        // --- 完了にする ---
+        addCompletedTodayId(task.id);
+        task.completedDate = getTodayString();
+        if (!state.tasks.some(t => t.id === taskId)) {
+          state.tasks.push(task);
+        }
+        if (!state.doneTasks.some(t => t.id === taskId)) {
+          state.doneTasks.unshift({ ...task });
+        }
+        showToast('タスクを完了にしました ✅');
+      } else {
+        // --- 未完了に戻す ---
+        removeCompletedTodayId(task.id);
+        delete task.completedDate;
+        state.doneTasks = state.doneTasks.filter(t => t.id !== taskId);
+        if (!state.tasks.some(t => t.id === taskId)) {
+          state.tasks.unshift(task);
+        }
+        showToast('タスクを未完了に戻しました ↩️');
+      }
+
+      saveToCache();
       renderAll();
-      showToast('タスクを完了にしました ✅');
 
       try {
         setSyncStatus('更新中...', true);
-        await callBackendApi('completeTask', { taskId });
+        if (newStatus) {
+          await callBackendApi('completeTask', { taskId });
+        } else {
+          await callBackendApi('saveTask', { taskData: { ...task, status: false } });
+        }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('完了エラー:', e);
@@ -3558,6 +4071,11 @@
 
     // 期日および開始時間によるタスクの並び替え（第1優先: 期日、第2優先: 開始時間、未設定は末尾）
     function compareTasksByDateAndTime(a, b) {
+      // 0. 完了タスクはグループ内の下部に配置（未完了タスクを優先）
+      if (a.status !== b.status) {
+        return a.status ? 1 : -1;
+      }
+
       // 1. 期日（日付）の比較（早い順、未設定は末尾）
       if (!a.date && b.date) return 1;
       if (a.date && !b.date) return -1;
