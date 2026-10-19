@@ -729,9 +729,10 @@ function getInitialData() {
     }
   }
 
-  // 2. タスクデータ取得 (Private, Biz, 旧タスクシートから未完了タスクを取得)
+  // 2. タスクデータ取得 (Private, Biz, 旧タスクシートからタスクを取得)
   const tasks = [];
   const taskSheetNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME];
+  const lingeringDoneTasks = [];
   
   taskSheetNames.forEach(name => {
     const taskSheet = ss.getSheetByName(name);
@@ -748,25 +749,40 @@ function getInitialData() {
           if (name === CONFIG.BIZ_SHEET_NAME && !taskObj.type) {
             taskObj.type = "Biz";
           }
-          tasks.push(taskObj);
+          // 未完了タスクシート内に完了済み行が残っていた場合は未完了一覧に含めず完了側に退避
+          if (taskObj.status) {
+            lingeringDoneTasks.push(taskObj);
+          } else {
+            tasks.push(taskObj);
+          }
         }
       }
     }
   });
   
-  // 3. 完了タスクデータ取得 (直近50件)
+  // 3. 完了タスクデータ取得 (先頭2行目以降の最新履歴から直近100件)
   const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
   const doneTasks = [];
+  const seenDoneIds = new Set();
+
+  // 未完了シートに残っていた完了タスクがあれば優先追加
+  lingeringDoneTasks.forEach(dt => {
+    doneTasks.push(dt);
+    seenDoneIds.add(dt.id);
+  });
+
   if (doneSheet) {
     const values = doneSheet.getDataRange().getValues();
-    const startRow = Math.max(1, values.length - 50);
-    for (let i = values.length - 1; i >= startRow; i--) {
-      if (values[i][CONFIG.COL_ID - 1] !== "") {
+    const maxCount = Math.min(values.length, 101); // ヘッダー除く先頭100件（最新順）
+    for (let i = 1; i < maxCount; i++) {
+      const rowId = String(values[i][CONFIG.COL_ID - 1] || "");
+      if (rowId !== "" && !seenDoneIds.has(rowId)) {
         const taskObj = parseRowToTask(values[i]);
         if (taskObj.description && idToContextName[taskObj.description]) {
           taskObj.description = idToContextName[taskObj.description];
         }
         doneTasks.push(taskObj);
+        seenDoneIds.add(rowId);
       }
     }
   }

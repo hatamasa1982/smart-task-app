@@ -2163,33 +2163,39 @@
       }
     }
 
+    // バックエンドから取得した最新初期データをアプリ状態へ適用
+    function applyInitialData(data) {
+      if (!data) return;
+      const completedTodayIds = getCompletedTodaySet();
+      state.tasks = (data.tasks || []).map(t => {
+        if (t.description) t.description = getContextDisplayName(t.description);
+        return t;
+      });
+      state.projects = applySavedFolderOrder(data.projects || []);
+      state.doneTasks = (data.doneTasks || []).map(t => {
+        if (t.description) t.description = getContextDisplayName(t.description);
+        return t;
+      });
+      state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
+
+      // doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
+      state.doneTasks.forEach(dt => {
+        if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
+          state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
+        }
+      });
+
+      saveToCache();
+      renderAll();
+    }
+
     // 初期データ取得
     async function fetchInitialData() {
       setSyncStatus('同期中...', true);
       try {
         const data = await callBackendApi('getInitialData');
         if (data) {
-          const completedTodayIds = getCompletedTodaySet();
-          state.tasks = (data.tasks || []).map(t => {
-            if (t.description) t.description = getContextDisplayName(t.description);
-            return t;
-          });
-          state.projects = applySavedFolderOrder(data.projects || []);
-          state.doneTasks = (data.doneTasks || []).map(t => {
-            if (t.description) t.description = getContextDisplayName(t.description);
-            return t;
-          });
-          state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
-
-          // doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
-          state.doneTasks.forEach(dt => {
-            if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
-              state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
-            }
-          });
-
-          saveToCache();
-          renderAll();
+          applyInitialData(data);
           setSyncStatus('同期完了', false);
         }
       } catch (e) {
@@ -2623,6 +2629,12 @@
       tbody.innerHTML = '';
 
       let taskList = state.showCompleted ? [...state.doneTasks] : [...state.tasks];
+
+      // 通常表示（未完了一覧）時、今日完了したタスク以外の過去完了タスクは除外
+      if (!state.showCompleted) {
+        const todayStr = getTodayString();
+        taskList = taskList.filter(t => !t.status || t.completedDate === todayStr);
+      }
 
       // フォルダによるフィルタ
       if (state.selectedFolder !== 'All') {
@@ -3440,10 +3452,14 @@
 
       try {
         setSyncStatus('更新中...', true);
+        let resData = null;
         if (newStatus) {
-          await callBackendApi('completeTask', { taskId });
+          resData = await callBackendApi('completeTask', { taskId });
         } else {
-          await callBackendApi('saveTask', { taskData: { ...task, status: false } });
+          resData = await callBackendApi('saveTask', { taskData: { ...task, status: false } });
+        }
+        if (resData && resData.tasks) {
+          applyInitialData(resData);
         }
         setSyncStatus('同期完了', false);
       } catch (e) {
