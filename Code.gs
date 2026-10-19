@@ -604,7 +604,7 @@ function handleApiAction(action, payload) {
       result = addNewTaskFromApp(data);
     }
   } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
-    result = completeTaskFromApp(payload.taskId);
+    result = completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
   } else if (action === 'deleteTask') {
     result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
   } else if (action === 'saveProject') {
@@ -859,8 +859,9 @@ function addNewTaskFromApp(taskData) {
   const taskType = taskData.type || getProjectTypeById(ss, taskData.projectId);
   const sheet = getOrCreateTaskSheetByType(ss, taskType);
   
-  // 既存のIDがあれば引き継ぎ、なければ新規発行
-  const newId = taskData.id ? String(taskData.id) : Utilities.getUuid().split('-')[0];
+  // 既存のIDがあり、かつ一時ID (tmp_) でなければ引き継ぎ、それ以外は常に新規UUIDを発行
+  const isTempId = !taskData.id || String(taskData.id).startsWith('tmp_');
+  const newId = !isTempId ? String(taskData.id) : Utilities.getUuid().split('-')[0];
   const row = getRealLastRow(sheet) + 1;
   
   const dateVal = taskData.date ? new Date(taskData.date.replace(/-/g, "/")) : "";
@@ -1008,13 +1009,13 @@ function updateTaskFromApp(taskData) {
 }
 
 /**
- * アプリからタスクを完了処理
+ * アプリからタスクを完了処理（IDで見つからない場合はタスク名と期日でフォールバック検索）
  */
-function completeTaskFromApp(taskId) {
+function completeTaskFromApp(taskId, taskName, taskDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const location = findTaskLocationById(ss, taskId);
+  const location = findTaskLocationById(ss, taskId, taskName, taskDate);
   
-  if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskId);
+  if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskId + (taskName ? ` (名前: ${taskName})` : ""));
   
   const { sheet, row } = location;
   sheet.getRange(row, CONFIG.COL_STATUS).setValue(true);

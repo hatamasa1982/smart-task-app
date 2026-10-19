@@ -1954,8 +1954,8 @@
               if (payload.taskData && payload.taskData.id) api.updateTaskFromApp(payload.taskData);
               else api.addNewTaskFromApp(payload.taskData);
             }
-            else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId);
-            else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId);
+            else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
+            else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
             else if (action === 'saveProject') {
               if (payload.projectData && payload.projectData.id) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name);
               else api.addNewProjectFromApp(payload.projectData);
@@ -3454,7 +3454,11 @@
         setSyncStatus('更新中...', true);
         let resData = null;
         if (newStatus) {
-          resData = await callBackendApi('completeTask', { taskId });
+          resData = await callBackendApi('completeTask', { 
+            taskId: task.id,
+            taskName: task.task,
+            taskDate: task.date
+          });
         } else {
           resData = await callBackendApi('saveTask', { taskData: { ...task, status: false } });
         }
