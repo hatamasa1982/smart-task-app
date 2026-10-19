@@ -1032,7 +1032,7 @@
       text-align: center !important;
     }
 
-    /* サイドバー行アクション */
+    /* サイドバー行アクション（ホバー時のみ表示でスッキリ） */
     .folder-item-right {
       display: flex;
       align-items: center;
@@ -1041,25 +1041,23 @@
     .folder-action-btn {
       background: none;
       border: none;
-      color: #64748b;
+      color: #94a3b8;
       cursor: pointer;
-      padding: 2px 3px;
-      display: inline-flex;
+      padding: 1px 3px;
+      display: none;
       align-items: center;
       justify-content: center;
       border-radius: 4px;
       font-size: 13px;
       line-height: 1;
-      opacity: 0.55;
-      transition: all 0.15s ease;
+      transition: all 0.1s ease;
     }
     .folder-item:hover .folder-action-btn {
-      opacity: 0.9;
+      display: inline-flex;
     }
     .folder-action-btn:hover {
       color: #0284c7 !important;
       background: #e0f2fe;
-      opacity: 1 !important;
     }
 
     /* カレンダーナビゲーション */
@@ -1853,6 +1851,43 @@
     </div>
   </div>
 
+  <!-- ==================== フォルダ（プロジェクト）編集モーダル ==================== -->
+  <div id="project-edit-modal" class="modal-overlay" onclick="closeProjectModalOnOverlay(event)">
+    <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 380px;">
+      <div class="modal-header">
+        <h2 id="project-modal-title">フォルダを編集</h2>
+        <button class="sidebar-icon-btn" onclick="closeProjectModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="project-edit-id">
+        <input type="hidden" id="project-edit-oldname">
+        <div class="form-group">
+          <label class="form-label" for="project-edit-name-input">フォルダ名</label>
+          <input type="text" id="project-edit-name-input" class="form-input" placeholder="例: 【CDL】">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="project-edit-type-select">区分 (Biz / Private)</label>
+          <select id="project-edit-type-select" class="form-select">
+            <option value="Biz">Biz (仕事)</option>
+            <option value="Private">Private (プライベート)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn btn-secondary" onclick="deleteCurrentProjectFromModal()" style="color: #ef4444; border-color: #fecaca; background: #fff5f5;" title="このフォルダを削除">
+          <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">delete</span>
+          <span>削除</span>
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="closeProjectModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="saveProjectFromModal()">保存する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- トースト通知 -->
   <div id="toast" class="toast-container">
     <span class="material-symbols-outlined" style="color: #34d399;">check_circle</span>
@@ -2280,7 +2315,7 @@
 
       const hasActions = (folderKey !== 'All' && folderKey !== 'No Folder');
       if (hasActions) {
-        li.ondblclick = (e) => promptEditProject(projectId || '', folderKey, e);
+        li.ondblclick = (e) => openProjectModal(projectId || '', folderKey, e);
       }
 
       li.innerHTML = `
@@ -2292,11 +2327,8 @@
         <div class="folder-item-right">
           <span class="folder-badge">${count}</span>
           ${hasActions ? `
-            <button class="folder-action-btn" onclick="promptEditProject('${projectId || ''}', '${escapeHtml(folderKey)}', event)" title="フォルダ名を編集">
-              <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
-            </button>
-            <button class="folder-action-btn" onclick="confirmDeleteProject('${projectId || ''}', '${escapeHtml(folderKey)}', event)" title="削除" style="color: #ef4444;">
-              <span class="material-symbols-outlined" style="font-size: 14px;">delete</span>
+            <button class="folder-action-btn" onclick="openProjectModal('${projectId || ''}', '${escapeHtml(folderKey)}', event)" title="フォルダを編集">
+              <span class="material-symbols-outlined" style="font-size: 13px;">edit</span>
             </button>
           ` : ''}
         </div>
@@ -2323,47 +2355,106 @@
       showToast(`フォルダ「${movedProj.name}」を移動しました ↕`);
     }
 
-    // フォルダ（プロジェクト）編集ダイアログ
-    async function promptEditProject(projectId, currentName, e) {
+    // ----------------------------------
+    // フォルダ（プロジェクト）編集モーダル
+    // ----------------------------------
+    function openProjectModal(projectId, currentName, e) {
       if (e) e.stopPropagation();
-      const newName = prompt('フォルダ名を編集してください:', currentName);
-      if (!newName || !newName.trim() || newName.trim() === currentName) return;
-
-      const trimmed = newName.trim();
-
-      // 1. state.projects の名前更新
       const p = state.projects.find(proj => (proj.id && String(proj.id) === String(projectId)) || proj.name === currentName);
-      const projId = p ? p.id : projectId;
-      if (p) p.name = trimmed;
+      
+      const projId = p ? p.id : (projectId || '');
+      const nameVal = p ? p.name : currentName;
+      const typeVal = (p && p.type) ? p.type : 'Biz';
 
-      // 2. タスク一覧内の projectName を更新
+      document.getElementById('project-edit-id').value = projId;
+      document.getElementById('project-edit-oldname').value = nameVal;
+      document.getElementById('project-edit-name-input').value = nameVal;
+      document.getElementById('project-edit-type-select').value = typeVal;
+
+      document.getElementById('project-edit-modal').classList.add('active');
+      setTimeout(() => {
+        const input = document.getElementById('project-edit-name-input');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 80);
+    }
+
+    function closeProjectModal() {
+      const el = document.getElementById('project-edit-modal');
+      if (el) el.classList.remove('active');
+    }
+
+    function closeProjectModalOnOverlay(e) {
+      if (e.target.id === 'project-edit-modal') {
+        closeProjectModal();
+      }
+    }
+
+    async function saveProjectFromModal() {
+      const projId = document.getElementById('project-edit-id').value;
+      const oldName = document.getElementById('project-edit-oldname').value;
+      const newName = document.getElementById('project-edit-name-input').value.trim();
+      const newType = document.getElementById('project-edit-type-select').value;
+
+      if (!newName) {
+        alert('フォルダ名を入力してください');
+        return;
+      }
+
+      // state.projects の更新
+      const p = state.projects.find(proj => (proj.id && String(proj.id) === String(projId)) || proj.name === oldName);
+      if (p) {
+        p.name = newName;
+        p.type = newType;
+      }
+
+      // タスク一覧内の projectName と type の更新
       state.tasks.forEach(t => {
-        if (t.projectName === currentName || (t.projectId && String(t.projectId) === String(projId))) {
-          t.projectName = trimmed;
+        if (t.projectName === oldName || (t.projectId && String(t.projectId) === String(projId))) {
+          t.projectName = newName;
+          t.type = newType;
         }
       });
       state.doneTasks.forEach(t => {
-        if (t.projectName === currentName || (t.projectId && String(t.projectId) === String(projId))) {
-          t.projectName = trimmed;
+        if (t.projectName === oldName || (t.projectId && String(t.projectId) === String(projId))) {
+          t.projectName = newName;
+          t.type = newType;
         }
       });
 
-      if (state.selectedFolder === currentName) {
-        state.selectedFolder = trimmed;
+      if (state.selectedFolder === oldName) {
+        state.selectedFolder = newName;
       }
 
+      closeProjectModal();
       saveFolderOrder();
+      saveToCache();
       renderAll();
-      showToast(`フォルダ名を「${trimmed}」に更新しました 📁`);
+      showToast(`フォルダ「${newName}」(${newType}) を保存しました 📁`);
 
       try {
         setSyncStatus('保存中...', true);
-        await callBackendApi('saveProject', { projectData: { id: projId, name: trimmed } });
+        await callBackendApi('saveProject', {
+          projectData: {
+            id: projId,
+            name: newName,
+            type: newType
+          }
+        });
         setSyncStatus('同期完了', false);
       } catch (err) {
         console.error('フォルダ更新エラー:', err);
         showToast('フォルダ更新の同期に失敗しました');
       }
+    }
+
+    async function deleteCurrentProjectFromModal() {
+      const projId = document.getElementById('project-edit-id').value;
+      const oldName = document.getElementById('project-edit-oldname').value;
+      closeProjectModal();
+      confirmDeleteProject(projId, oldName);
     }
 
     // フォルダ（プロジェクト）削除ダイアログ

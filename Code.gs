@@ -609,7 +609,7 @@ function handleApiAction(action, payload) {
     result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
   } else if (action === 'saveProject') {
     if (payload.projectData && payload.projectData.id) {
-      result = updateProjectFromApp(payload.projectData.id, payload.projectData.name);
+      result = updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
     } else {
       result = addNewProjectFromApp(payload.projectData);
     }
@@ -1047,7 +1047,7 @@ function addNewProjectFromApp(projectData) {
 /**
  * アプリからプロジェクト（フォルダ）名を更新
  */
-function updateProjectFromApp(projectId, newName) {
+function updateProjectFromApp(projectId, newName, newType) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
   if (!sheet) throw new Error("プロジェクトシートが見つかりません。");
@@ -1055,7 +1055,7 @@ function updateProjectFromApp(projectId, newName) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) throw new Error("プロジェクトが存在しません。");
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
   let foundRow = -1;
   let oldName = "";
 
@@ -1078,11 +1078,16 @@ function updateProjectFromApp(projectId, newName) {
     }
   }
 
-  if (foundRow !== -1 && newName && String(newName).trim() !== "") {
-    const trimmedNewName = String(newName).trim();
-    sheet.getRange(foundRow, 2).setValue(trimmedNewName);
-    if (oldName && oldName !== trimmedNewName) {
-      syncProjectNameChange(ss, oldName, trimmedNewName);
+  if (foundRow !== -1) {
+    if (newName && String(newName).trim() !== "") {
+      const trimmedNewName = String(newName).trim();
+      sheet.getRange(foundRow, 2).setValue(trimmedNewName);
+      if (oldName && oldName !== trimmedNewName) {
+        syncProjectNameChange(ss, oldName, trimmedNewName);
+      }
+    }
+    if (newType && (newType === "Biz" || newType === "Private")) {
+      sheet.getRange(foundRow, 3).setValue(newType);
     }
   }
 
