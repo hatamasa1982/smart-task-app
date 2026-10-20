@@ -589,10 +589,10 @@
     .col-star { width: 32px; text-align: center !important; }
     .col-folder { width: 130px; }
     .col-task { min-width: 250px; }
-    .col-due { width: 140px; }
-    .col-context { width: 110px; }
-    .col-time { width: 125px; }
-    .col-repeat { width: 75px; }
+    .col-due { width: 85px; }
+    .col-time { width: 105px; }
+    .col-context { width: 85px; }
+    .col-repeat { width: 62px; }
     .col-actions { width: 45px; text-align: center !important; }
 
     /* 時間インライン入力用フレックスコンテナ */
@@ -677,7 +677,8 @@
       white-space: nowrap;
       vertical-align: middle;
     }
-    .task-row td.col-due {
+    .task-row td.col-due,
+    .task-row td.col-time {
       padding: 4px;
       overflow: visible;
     }
@@ -1674,8 +1675,8 @@
       <!-- Quick Add Task バー -->
       <div class="quick-add-container">
         <span class="material-symbols-outlined" style="color: #94a3b8; font-size: 18px;">add_task</span>
-        <input type="text" id="quick-add-input" class="quick-add-input" placeholder="Quick Add Task (Enter to save)" onkeydown="if(event.key === 'Enter') handleQuickAdd()">
-        <button class="btn-quick-add" onclick="handleQuickAdd()" title="タスクを追加">
+        <input type="text" id="quick-add-input" class="quick-add-input" placeholder="Quick Add Task (Enter to save)" onkeydown="if(event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); handleQuickAdd(); }">
+        <button id="btn-quick-add" class="btn-quick-add" onclick="handleQuickAdd()" title="タスクを追加">
           <span class="material-symbols-outlined">add</span>
         </button>
       </div>
@@ -1690,8 +1691,8 @@
               <th class="col-folder">Folder</th>
               <th class="col-task">Task</th>
               <th class="col-due">Due Date</th>
-              <th class="col-context">Context</th>
               <th class="col-time">時間</th>
+              <th class="col-context">Context</th>
               <th class="col-repeat">Repeat</th>
               <th class="col-actions"></th>
             </tr>
@@ -1795,7 +1796,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
-        <button class="btn btn-primary" onclick="submitTaskForm()">
+        <button id="btn-modal-save-task" class="btn btn-primary" onclick="submitTaskForm()">
           <span class="material-symbols-outlined" style="font-size: 16px;">save</span>保存する
         </button>
       </div>
@@ -1957,7 +1958,7 @@
             else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
             else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
             else if (action === 'saveProject') {
-              if (payload.projectData && payload.projectData.id) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name);
+              if (payload.projectData && payload.projectData.id) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
               else api.addNewProjectFromApp(payload.projectData);
             }
             else if (action === 'deleteProject') api.deleteProjectFromApp(payload.projectId, payload.projectName);
@@ -2117,10 +2118,13 @@
 
     function saveToCache() {
       try {
+        // 一時ID (tmp_...) のタスクは確定していないためキャッシュ保存から除外して重複・ゾンビ化を防止
+        const safeTasks = (state.tasks || []).filter(t => !t.id || !String(t.id).startsWith('tmp_'));
+        const safeDoneTasks = (state.doneTasks || []).filter(t => !t.id || !String(t.id).startsWith('tmp_'));
         localStorage.setItem(CACHE_DATA_KEY, JSON.stringify({
-          tasks: state.tasks,
+          tasks: safeTasks,
           projects: state.projects,
-          doneTasks: state.doneTasks,
+          doneTasks: safeDoneTasks,
           contexts: state.contexts
         }));
       } catch (e) {
@@ -2863,14 +2867,14 @@
             ${dueText}
           </span>
         </td>
-        <td class="col-context ${getContextDisplayName(task.description) ? '' : 'empty-badge'}" id="task-context-${task.id}">
-          <span class="task-context-cell editable-cell" onclick="startInlineEditContext(event, '${task.id}')" title="クリックしてコンテキストを変更">
-            ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
-          </span>
-        </td>
         <td class="col-time ${(task.startTime || task.endTime) ? '' : 'empty-badge'}" id="task-time-${task.id}">
           <span class="editable-cell" onclick="startInlineEditTime(event, '${task.id}')" title="クリックして時間を編集" style="color: #64748b; font-size: 11.5px; font-variant-numeric: tabular-nums;">
             ${formatTimeRange(task.startTime, task.endTime)}
+          </span>
+        </td>
+        <td class="col-context ${getContextDisplayName(task.description) ? '' : 'empty-badge'}" id="task-context-${task.id}">
+          <span class="task-context-cell editable-cell" onclick="startInlineEditContext(event, '${task.id}')" title="クリックしてコンテキストを変更">
+            ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
           </span>
         </td>
         <td class="col-repeat ${(task.repeat && task.repeat !== 'None') ? '' : 'empty-badge'}" id="task-repeat-${task.id}">
@@ -3358,12 +3362,20 @@
     }
 
     // ----------------------------------
-    // Quick Add Task 処理
+    // Quick Add Task 処理（二重送信完全防止 & 排他制御付き）
     // ----------------------------------
+    let isQuickAddSubmitting = false;
+
     async function handleQuickAdd() {
+      if (isQuickAddSubmitting) return;
+
       const input = document.getElementById('quick-add-input');
-      const text = input.value.trim();
+      const addBtn = document.getElementById('btn-quick-add');
+      const text = input ? input.value.trim() : '';
       if (!text) return;
+
+      isQuickAddSubmitting = true;
+      if (addBtn) addBtn.disabled = true;
 
       // プロジェクト判定（現在選択中のフォルダ）
       let projName = state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder' ? state.selectedFolder : '';
@@ -3389,7 +3401,7 @@
 
       // 楽観的UI更新
       state.tasks.unshift(newTask);
-      input.value = '';
+      if (input) input.value = '';
       renderAll();
       showToast('タスクを追加しました');
 
@@ -3409,8 +3421,14 @@
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('タスク追加エラー:', e);
+        // エラー時は画面の一時タスクを削除してロールバック
+        state.tasks = state.tasks.filter(t => t.id !== newTask.id);
+        renderAll();
         showToast('保存に失敗しました: ' + (e.message || ''));
         setSyncStatus('エラー', false);
+      } finally {
+        isQuickAddSubmitting = false;
+        if (addBtn) addBtn.disabled = false;
       }
     }
 
@@ -3562,13 +3580,21 @@
       document.getElementById('task-modal').classList.remove('active');
     }
 
+    let isModalSubmitting = false;
+
     async function submitTaskForm() {
+      if (isModalSubmitting) return;
+
       const id = document.getElementById('task-id-input').value;
       const title = document.getElementById('task-title-input').value.trim();
       if (!title) {
         alert('タスク名を入力してください');
         return;
       }
+
+      const saveBtn = document.getElementById('btn-modal-save-task');
+      isModalSubmitting = true;
+      if (saveBtn) saveBtn.disabled = true;
 
       const projSelect = document.getElementById('task-project-select');
       const selectedProj = state.projects.find(p => p.id === projSelect.value);
@@ -3587,6 +3613,9 @@
         type: document.getElementById('task-type-select').value,
         status: false
       };
+
+      // 編集前のバックアップ（エラー時のロールバック用）
+      const previousTasks = [...state.tasks];
 
       closeModal();
 
@@ -3617,8 +3646,14 @@
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('保存エラー:', e);
+        // エラー時はロールバック
+        state.tasks = previousTasks;
+        renderAll();
         showToast('保存に失敗しました: ' + (e.message || ''));
         setSyncStatus('エラー', false);
+      } finally {
+        isModalSubmitting = false;
+        if (saveBtn) saveBtn.disabled = false;
       }
     }
 
@@ -4081,11 +4116,21 @@
       try {
         setSyncStatus('保存中...', true);
         const res = await callBackendApi('saveTask', { taskData: cloned });
-        if (res && res.id) cloned.id = res.id;
+        if (res && res.tasks) {
+          state.tasks = res.tasks;
+          state.projects = res.projects || state.projects;
+          state.doneTasks = res.doneTasks || state.doneTasks;
+        } else if (res && res.id) {
+          cloned.id = res.id;
+        }
+        renderAll();
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('複製エラー:', e);
+        state.tasks = state.tasks.filter(t => t.id !== cloned.id);
+        renderAll();
         showToast('複製の保存に失敗しました');
+        setSyncStatus('エラー', false);
       }
     }
 

@@ -856,6 +856,9 @@ function getOrCreateTaskSheetByType(ss, type) {
  */
 function addNewTaskFromApp(taskData) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!taskData || !taskData.task || String(taskData.task).trim() === "") {
+    return getInitialData();
+  }
   const taskType = taskData.type || getProjectTypeById(ss, taskData.projectId);
   const sheet = getOrCreateTaskSheetByType(ss, taskType);
   
@@ -934,6 +937,8 @@ function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includ
   // 2. taskId で見つからなかった場合、タスク名（および期日）でフォールバック検索（A列空欄行等の救済）
   if (fallbackTaskName) {
     const targetName = String(fallbackTaskName).trim();
+    let bestMatch = null;
+
     for (let name of candidateNames) {
       const sheet = ss.getSheetByName(name);
       if (!sheet) continue;
@@ -941,18 +946,39 @@ function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includ
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) continue;
 
-      const tasks = sheet.getRange(2, CONFIG.COL_TASK, lastRow - 1, 1).getValues();
-      for (let i = 0; i < tasks.length; i++) {
-        if (String(tasks[i][0]).trim() === targetName) {
+      // A列(ID), G列(Task), H列(Date) をまとめて取得
+      const rangeValues = sheet.getRange(2, 1, lastRow - 1, CONFIG.COL_DATE_E).getValues();
+      for (let i = 0; i < rangeValues.length; i++) {
+        const rowData = rangeValues[i];
+        const rowTaskName = String(rowData[CONFIG.COL_TASK - 1] || "").trim();
+
+        if (rowTaskName === targetName) {
           const row = i + 2;
-          // ID列が空なら自動的にIDを採番して書き込む
-          const currentId = sheet.getRange(row, CONFIG.COL_ID).getValue();
-          if (!currentId) {
+          const currentId = String(rowData[CONFIG.COL_ID - 1] || "").trim();
+          const rowDateStr = formatDate(rowData[CONFIG.COL_DATE_E - 1]);
+          const dateMatches = !fallbackDate || (rowDateStr === String(fallbackDate).trim());
+
+          // 日付も一致し、IDが空欄のものを最優先
+          if (!currentId && dateMatches) {
             sheet.getRange(row, CONFIG.COL_ID).setValue(taskId || Utilities.getUuid().split('-')[0]);
+            return { sheet: sheet, row: row };
           }
-          return { sheet: sheet, row: row };
+
+          // IDが空欄のものを第2優先
+          if (!currentId && !bestMatch) {
+            bestMatch = { sheet: sheet, row: row, needId: true };
+          } else if (dateMatches && !bestMatch) {
+            bestMatch = { sheet: sheet, row: row, needId: false };
+          }
         }
       }
+    }
+
+    if (bestMatch) {
+      if (bestMatch.needId) {
+        bestMatch.sheet.getRange(bestMatch.row, CONFIG.COL_ID).setValue(taskId || Utilities.getUuid().split('-')[0]);
+      }
+      return { sheet: bestMatch.sheet, row: bestMatch.row };
     }
   }
 
