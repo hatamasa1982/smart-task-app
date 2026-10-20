@@ -970,17 +970,17 @@ function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includ
           const rowDateStr = formatDate(rowData[CONFIG.COL_DATE_E - 1]);
           const dateMatches = !fallbackDate || (rowDateStr === String(fallbackDate).trim());
 
-          // 日付も一致し、IDが空欄のものを最優先
-          if (!currentId && dateMatches) {
-            sheet.getRange(row, CONFIG.COL_ID).setValue(taskId || Utilities.getUuid().split('-')[0]);
+          // 日付も一致するものを最優先（IDが空欄なら新IDを採番して返す）
+          if (dateMatches) {
+            if (!currentId) {
+              sheet.getRange(row, CONFIG.COL_ID).setValue(taskId || Utilities.getUuid().split('-')[0]);
+            }
             return { sheet: sheet, row: row };
           }
 
-          // IDが空欄のものを第2優先
-          if (!currentId && !bestMatch) {
-            bestMatch = { sheet: sheet, row: row, needId: true };
-          } else if (dateMatches && !bestMatch) {
-            bestMatch = { sheet: sheet, row: row, needId: false };
+          // 日付が合わなくてもタスク名が一致するものを第2候補として保持
+          if (!bestMatch) {
+            bestMatch = { sheet: sheet, row: row, needId: !currentId };
           }
         }
       }

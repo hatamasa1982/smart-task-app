@@ -2952,7 +2952,7 @@
             <button class="row-action-btn" onclick="cloneTask('${task.id}')" title="複製（コピー）">
               <span class="material-symbols-outlined" style="font-size: 15px;">content_copy</span>
             </button>
-            <button class="row-action-btn" onclick="deleteTaskRow('${task.id}')" title="削除" style="color: #ef4444;">
+            <button class="row-action-btn" onclick="deleteTaskRow('${task.id}', event)" title="削除" style="color: #ef4444;">
               <span class="material-symbols-outlined" style="font-size: 15px;">delete</span>
             </button>
           </div>
@@ -4269,28 +4269,57 @@
       }
     }
 
-    async function deleteTaskRow(taskId) {
-      const taskIdStr = String(taskId);
-      const task = state.tasks.find(t => String(t.id) === taskIdStr) || state.doneTasks.find(t => String(t.id) === taskIdStr);
+    async function deleteTaskRow(taskId, event) {
+      if (event && event.stopPropagation) event.stopPropagation();
+
+      let targetId = String(taskId);
+
+      // 1. もし仮ID（作成中タスク）であれば、タスク特定＆本番ID確定を待機
+      let task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
+
+      // もしすでに本番IDに切り替わっていて targetId (tmp_...) で見つからない場合、pendingCreationPromises から探索
+      if (!task && targetId.startsWith('tmp_')) {
+        const pending = pendingCreationPromises.get(targetId);
+        if (pending && pending.realId) {
+          targetId = String(pending.realId);
+          task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
+        }
+      }
+
       if (!task) return;
 
       if (!confirm(`タスク「${task.task}」を削除しますか？`)) return;
 
-      // 1. 本日完了タスク一覧からも確実に除去して復活を完全防止
-      removeCompletedTodayId(taskIdStr);
+      // 2. 本日完了タスク一覧からも確実に除去して復活を完全防止
+      removeCompletedTodayId(targetId);
+      removeCompletedTodayId(String(taskId));
 
-      // 2. 画面から即座に削除（楽観的削除）
-      state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
-      state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
+      // 3. 画面から即座に削除（楽観的削除）
+      state.tasks = state.tasks.filter(t => String(t.id) !== targetId && String(t.id) !== String(taskId));
+      state.doneTasks = state.doneTasks.filter(t => String(t.id) !== targetId && String(t.id) !== String(taskId));
       saveToCache();
       renderAll();
       showToast('タスクを削除しました 🗑️');
 
-      // 3. バックエンドへ削除リクエスト送信
+      // 4. もし作成通信が進行中であれば、本番ID確定を待ってからバックエンド削除へ進む
+      if (targetId.startsWith('tmp_')) {
+        const pending = pendingCreationPromises.get(targetId);
+        if (pending) {
+          setSyncStatus('タスク確定待ち...', true);
+          try {
+            const realId = await pending.promise;
+            if (realId) targetId = String(realId);
+          } catch (e) {
+            console.warn('新規作成待機中の削除:', e);
+          }
+        }
+      }
+
+      // 5. バックエンドへ削除リクエスト送信
       try {
         setSyncStatus('削除中...', true);
         const res = await callBackendApi('deleteTask', { 
-          taskId: taskIdStr, 
+          taskId: targetId, 
           taskName: task ? task.task : '',
           taskDate: task ? task.date : ''
         });
