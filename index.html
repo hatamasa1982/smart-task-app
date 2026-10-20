@@ -2092,15 +2092,16 @@
         if (!raw) return new Set();
         const obj = JSON.parse(raw);
         if (obj && obj.date === getTodayString() && Array.isArray(obj.ids)) {
-          return new Set(obj.ids);
+          return new Set(obj.ids.map(id => String(id)));
         }
       } catch (e) {}
       return new Set();
     }
 
     function addCompletedTodayId(id) {
+      if (!id) return;
       const set = getCompletedTodaySet();
-      set.add(id);
+      set.add(String(id));
       localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
         date: getTodayString(),
         ids: Array.from(set)
@@ -2108,8 +2109,9 @@
     }
 
     function removeCompletedTodayId(id) {
+      if (!id) return;
       const set = getCompletedTodaySet();
-      set.delete(id);
+      set.delete(String(id));
       localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
         date: getTodayString(),
         ids: Array.from(set)
@@ -2142,7 +2144,7 @@
             const completedTodayIds = getCompletedTodaySet();
             state.tasks = (parsed.tasks || []).map(t => {
               if (t.description) t.description = getContextDisplayName(t.description);
-              if (t.status && completedTodayIds.has(t.id)) t.completedDate = getTodayString();
+              if (t.status && completedTodayIds.has(String(t.id))) t.completedDate = getTodayString();
               return t;
             });
             state.projects = applySavedFolderOrder(parsed.projects || []);
@@ -2154,7 +2156,8 @@
 
             // doneTasksの中で今日完了したタスクがあり、state.tasksにまだ無ければ合流
             state.doneTasks.forEach(dt => {
-              if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
+              const dtIdStr = String(dt.id);
+              if (completedTodayIds.has(dtIdStr) && !state.tasks.some(t => String(t.id) === dtIdStr)) {
                 state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
               }
             });
@@ -2184,7 +2187,8 @@
 
       // doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
       state.doneTasks.forEach(dt => {
-        if (completedTodayIds.has(dt.id) && !state.tasks.some(t => t.id === dt.id)) {
+        const dtIdStr = String(dt.id);
+        if (completedTodayIds.has(dtIdStr) && !state.tasks.some(t => String(t.id) === dtIdStr)) {
           state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
         }
       });
@@ -3434,9 +3438,10 @@
 
     // 完了ステータス切り替え
     async function handleToggleStatus(taskId) {
-      let task = state.tasks.find(t => t.id === taskId);
+      const taskIdStr = String(taskId);
+      let task = state.tasks.find(t => String(t.id) === taskIdStr);
       if (!task) {
-        task = state.doneTasks.find(t => t.id === taskId);
+        task = state.doneTasks.find(t => String(t.id) === taskIdStr);
       }
       if (!task) return;
 
@@ -3447,10 +3452,10 @@
         // --- 完了にする ---
         addCompletedTodayId(task.id);
         task.completedDate = getTodayString();
-        if (!state.tasks.some(t => t.id === taskId)) {
+        if (!state.tasks.some(t => String(t.id) === taskIdStr)) {
           state.tasks.push(task);
         }
-        if (!state.doneTasks.some(t => t.id === taskId)) {
+        if (!state.doneTasks.some(t => String(t.id) === taskIdStr)) {
           state.doneTasks.unshift({ ...task });
         }
         showToast('タスクを完了にしました ✅');
@@ -3458,8 +3463,8 @@
         // --- 未完了に戻す ---
         removeCompletedTodayId(task.id);
         delete task.completedDate;
-        state.doneTasks = state.doneTasks.filter(t => t.id !== taskId);
-        if (!state.tasks.some(t => t.id === taskId)) {
+        state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
+        if (!state.tasks.some(t => String(t.id) === taskIdStr)) {
           state.tasks.unshift(task);
         }
         showToast('タスクを未完了に戻しました ↩️');
@@ -3482,6 +3487,12 @@
         }
         if (resData && resData.tasks) {
           applyInitialData(resData);
+          // 安全ガード: 直前に完了したタスクが state.tasks に含まれていなければ確実に復元
+          if (newStatus && !state.tasks.some(t => String(t.id) === taskIdStr)) {
+            state.tasks.push({ ...task, status: true, completedDate: getTodayString() });
+            saveToCache();
+            renderAll();
+          }
         }
         setSyncStatus('同期完了', false);
       } catch (e) {
