@@ -1921,9 +1921,15 @@
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
     const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
-    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
+    const OLD_BROKEN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
 
-    let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
+    let storedUrl = localStorage.getItem(GAS_URL_KEY);
+    if (!storedUrl || storedUrl === OLD_BROKEN_GAS_URL) {
+      storedUrl = DEFAULT_GAS_URL;
+      try { localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL); } catch(e){}
+    }
+    let gasApiUrl = storedUrl;
 
     function getHiddenFolders() {
       try {
