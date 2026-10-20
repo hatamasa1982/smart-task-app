@@ -2174,6 +2174,10 @@
     function applyInitialData(data) {
       if (!data) return;
       const completedTodayIds = getCompletedTodaySet();
+
+      // 現在のstate.tasksに存在している「本日完了タスク」を退避して保護
+      const existingTodayDone = (state.tasks || []).filter(t => t.status && (t.completedDate === getTodayString() || completedTodayIds.has(String(t.id))));
+
       state.tasks = (data.tasks || []).map(t => {
         if (t.description) t.description = getContextDisplayName(t.description);
         return t;
@@ -2185,7 +2189,15 @@
       });
       state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
 
-      // doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
+      // 1. 退避しておいた本日完了タスクを確実に復元
+      existingTodayDone.forEach(et => {
+        const etIdStr = String(et.id);
+        if (!state.tasks.some(t => String(t.id) === etIdStr)) {
+          state.tasks.push(et);
+        }
+      });
+
+      // 2. doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
       state.doneTasks.forEach(dt => {
         const dtIdStr = String(dt.id);
         if (completedTodayIds.has(dtIdStr) && !state.tasks.some(t => String(t.id) === dtIdStr)) {

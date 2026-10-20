@@ -773,8 +773,8 @@ function getInitialData() {
 
   if (doneSheet) {
     const values = doneSheet.getDataRange().getValues();
-    const maxCount = Math.min(values.length, 101); // ヘッダー除く先頭100件（最新順）
-    for (let i = 1; i < maxCount; i++) {
+    const startRow = Math.max(1, values.length - 200); // 最新200件（末尾から逆順）
+    for (let i = values.length - 1; i >= startRow; i--) {
       const rowId = String(values[i][CONFIG.COL_ID - 1] || "");
       if (rowId !== "" && !seenDoneIds.has(rowId)) {
         const taskObj = parseRowToTask(values[i]);
