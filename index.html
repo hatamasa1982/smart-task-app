@@ -2107,41 +2107,6 @@
     }
 
     // キャッシュ読み込み
-    // --- 本日完了タスクの永続化管理 ---
-    const COMPLETED_TODAY_KEY = 'smart_tasks_completed_today';
-
-    function getCompletedTodaySet() {
-      try {
-        const raw = localStorage.getItem(COMPLETED_TODAY_KEY);
-        if (!raw) return new Set();
-        const obj = JSON.parse(raw);
-        if (obj && obj.date === getTodayString() && Array.isArray(obj.ids)) {
-          return new Set(obj.ids.map(id => String(id)));
-        }
-      } catch (e) {}
-      return new Set();
-    }
-
-    function addCompletedTodayId(id) {
-      if (!id) return;
-      const set = getCompletedTodaySet();
-      set.add(String(id));
-      localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
-        date: getTodayString(),
-        ids: Array.from(set)
-      }));
-    }
-
-    function removeCompletedTodayId(id) {
-      if (!id) return;
-      const set = getCompletedTodaySet();
-      set.delete(String(id));
-      localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
-        date: getTodayString(),
-        ids: Array.from(set)
-      }));
-    }
-
     function saveToCache() {
       try {
         // 一時ID (tmp_...) のタスクは確定していないためキャッシュ保存から除外して重複・ゾンビ化を防止
@@ -2165,10 +2130,8 @@
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.tasks) {
-            const completedTodayIds = getCompletedTodaySet();
             state.tasks = (parsed.tasks || []).map(t => {
               if (t.description) t.description = getContextDisplayName(t.description);
-              if (t.status && completedTodayIds.has(String(t.id))) t.completedDate = getTodayString();
               return t;
             });
             state.projects = applySavedFolderOrder(parsed.projects || []);
@@ -2177,14 +2140,6 @@
               return t;
             });
             state.contexts = (parsed.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
-
-            // doneTasksの中で今日完了したタスクがあり、state.tasksにまだ無ければ合流
-            state.doneTasks.forEach(dt => {
-              const dtIdStr = String(dt.id);
-              if (completedTodayIds.has(dtIdStr) && !state.tasks.some(t => String(t.id) === dtIdStr)) {
-                state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
-              }
-            });
 
             renderAll();
           }
@@ -2197,8 +2152,6 @@
     // バックエンドから取得した最新初期データをアプリ状態へ適用
     function applyInitialData(data) {
       if (!data) return;
-      const completedTodayIds = getCompletedTodaySet();
-      const todayStr = getTodayString();
 
       // 1. コンテキストとフォルダの更新
       state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
@@ -2212,29 +2165,13 @@
           return t;
         });
 
-      // 3. 完了タスク一覧の更新
+      // 3. 完了タスク一覧の更新（完了シートの履歴）
       state.doneTasks = (data.doneTasks || []).map(t => {
         if (t.description) t.description = getContextDisplayName(t.description);
         return t;
       });
 
-      // 4. 今日完了したタスクを state.tasks に合流させて打消し線表示
-      state.doneTasks.forEach(dt => {
-        const dtIdStr = String(dt.id);
-        const isCompletedToday = completedTodayIds.has(dtIdStr) || 
-                                (dt.completedDate === todayStr) || 
-                                (dt.status && dt.date === todayStr);
-
-        if (isCompletedToday && !state.tasks.some(t => String(t.id) === dtIdStr)) {
-          state.tasks.push({
-            ...dt,
-            status: true,
-            completedDate: todayStr
-          });
-        }
-      });
-
-      // 5. キャッシュ保存と画面描画
+      // 4. キャッシュ保存と画面描画
       saveToCache();
       renderAll();
     }
@@ -2760,10 +2697,9 @@
 
       let taskList = state.showCompleted ? [...state.doneTasks] : [...state.tasks];
 
-      // 通常表示（未完了一覧）時、今日完了したタスク以外の過去完了タスクは除外
+      // 通常表示時は未完了タスクのみ表示
       if (!state.showCompleted) {
-        const todayStr = getTodayString();
-        taskList = taskList.filter(t => !t.status || t.completedDate === todayStr);
+        taskList = taskList.filter(t => !t.status);
       }
 
       // フォルダによるフィルタ
@@ -2891,13 +2827,7 @@
 
         taskList.forEach(t => {
           if (!t.date) {
-            if (t.status && t.completedDate === todayStr) {
-              groups.today.list.push(t);
-            } else {
-              groups.nodate.list.push(t);
-            }
-          } else if (t.status && t.completedDate === todayStr && t.date <= todayStr) {
-            groups.today.list.push(t);
+            groups.nodate.list.push(t);
           } else if (t.date < todayStr) {
             groups.past.list.push(t);
           } else if (t.date === todayStr) {
@@ -3553,37 +3483,29 @@
       }
     }
 
-    // 完了ステータス切り替え
+    // 完了ステータス切り替え（完了時は即座に一覧から消去し、履歴へ移動）
     async function handleToggleStatus(taskId) {
       const taskIdStr = String(taskId);
       let task = state.tasks.find(t => String(t.id) === taskIdStr);
-      if (!task) {
-        task = state.doneTasks.find(t => String(t.id) === taskIdStr);
-      }
-      if (!task) return;
+      let isCompleting = true;
 
-      const newStatus = !task.status;
-      task.status = newStatus;
-
-      if (newStatus) {
+      if (task) {
         // --- 完了にする ---
-        addCompletedTodayId(task.id);
-        task.completedDate = getTodayString();
-        if (!state.tasks.some(t => String(t.id) === taskIdStr)) {
-          state.tasks.push(task);
-        }
-        if (!state.doneTasks.some(t => String(t.id) === taskIdStr)) {
-          state.doneTasks.unshift({ ...task });
-        }
+        isCompleting = true;
+        task.status = true;
+        // 未完了一覧から即座に削除（スッと消える）
+        state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
+        // 完了一覧（履歴）の先頭に追加
+        state.doneTasks.unshift({ ...task });
         showToast('タスクを完了にしました ✅');
       } else {
-        // --- 未完了に戻す ---
-        removeCompletedTodayId(task.id);
-        delete task.completedDate;
+        // 完了履歴から未完了に戻す場合
+        task = state.doneTasks.find(t => String(t.id) === taskIdStr);
+        if (!task) return;
+        isCompleting = false;
+        task.status = false;
         state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
-        if (!state.tasks.some(t => String(t.id) === taskIdStr)) {
-          state.tasks.unshift(task);
-        }
+        state.tasks.unshift(task);
         showToast('タスクを未完了に戻しました ↩️');
       }
 
@@ -3593,7 +3515,7 @@
       try {
         setSyncStatus('更新中...', true);
         let resData = null;
-        if (newStatus) {
+        if (isCompleting) {
           resData = await callBackendApi('completeTask', { 
             taskId: task.id,
             taskName: task.task,
@@ -3604,17 +3526,12 @@
         }
         if (resData && resData.tasks) {
           applyInitialData(resData);
-          // 安全ガード: 直前に完了したタスクが state.tasks に含まれていなければ確実に復元
-          if (newStatus && !state.tasks.some(t => String(t.id) === taskIdStr)) {
-            state.tasks.push({ ...task, status: true, completedDate: getTodayString() });
-            saveToCache();
-            renderAll();
-          }
         }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('完了エラー:', e);
         showToast('更新に失敗しました');
+        setSyncStatus('エラー', false);
       }
     }
 
