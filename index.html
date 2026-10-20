@@ -1877,10 +1877,16 @@
         </div>
       </div>
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-        <button class="btn btn-secondary" onclick="deleteCurrentProjectFromModal()" style="color: #ef4444; border-color: #fecaca; background: #fff5f5;" title="このフォルダを削除">
-          <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">delete</span>
-          <span>削除</span>
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="hideCurrentProjectFromModal()" style="color: #64748b; border-color: #cbd5e1;" title="このフォルダをサイドバーから非表示（アーカイブ）">
+            <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">visibility_off</span>
+            <span>非表示</span>
+          </button>
+          <button class="btn btn-secondary" onclick="deleteCurrentProjectFromModal()" style="color: #ef4444; border-color: #fecaca; background: #fff5f5;" title="このフォルダを完全に削除">
+            <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">delete</span>
+            <span>削除</span>
+          </button>
+        </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-secondary" onclick="closeProjectModal()">キャンセル</button>
           <button class="btn btn-primary" onclick="saveProjectFromModal()">保存する</button>
@@ -1914,9 +1920,25 @@
 
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
+    const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
     const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
 
     let gasApiUrl = localStorage.getItem(GAS_URL_KEY) || DEFAULT_GAS_URL;
+
+    function getHiddenFolders() {
+      try {
+        const raw = localStorage.getItem(HIDDEN_FOLDERS_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveHiddenFolders(list) {
+      try {
+        localStorage.setItem(HIDDEN_FOLDERS_KEY, JSON.stringify(list));
+      } catch (e) {}
+    }
 
     // アプリ状態
     let state = {
@@ -1924,6 +1946,8 @@
       projects: [],
       doneTasks: [],
       contexts: [],
+      hiddenFolders: getHiddenFolders(), // 非表示フォルダ名/IDの配列
+      showHiddenFoldersSection: false,    // 非表示フォルダ一覧の開閉フラグ
       selectedFolder: 'All',   // 'All', 'No Folder', または プロジェクト名
       selectedContext: 'All',  // 'All', 'No Context', または コンテキスト名
       selectedDate: null,      // カレンダー選択日付 (YYYY-MM-DD)
@@ -2174,37 +2198,43 @@
     function applyInitialData(data) {
       if (!data) return;
       const completedTodayIds = getCompletedTodaySet();
+      const todayStr = getTodayString();
 
-      // 現在のstate.tasksに存在している「本日完了タスク」を退避して保護
-      const existingTodayDone = (state.tasks || []).filter(t => t.status && (t.completedDate === getTodayString() || completedTodayIds.has(String(t.id))));
-
-      state.tasks = (data.tasks || []).map(t => {
-        if (t.description) t.description = getContextDisplayName(t.description);
-        return t;
-      });
+      // 1. コンテキストとフォルダの更新
+      state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
       state.projects = applySavedFolderOrder(data.projects || []);
+
+      // 2. バックエンドから届いた未完了タスク（未確定の一時ID tmp_... を排除し、本番IDのみ）
+      state.tasks = (data.tasks || [])
+        .filter(t => t.id && !String(t.id).startsWith('tmp_'))
+        .map(t => {
+          if (t.description) t.description = getContextDisplayName(t.description);
+          return t;
+        });
+
+      // 3. 完了タスク一覧の更新
       state.doneTasks = (data.doneTasks || []).map(t => {
         if (t.description) t.description = getContextDisplayName(t.description);
         return t;
       });
-      state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
 
-      // 1. 退避しておいた本日完了タスクを確実に復元
-      existingTodayDone.forEach(et => {
-        const etIdStr = String(et.id);
-        if (!state.tasks.some(t => String(t.id) === etIdStr)) {
-          state.tasks.push(et);
-        }
-      });
-
-      // 2. doneTasksの中で今日完了したタスクを state.tasks に合流させて打消し線表示
+      // 4. 今日完了したタスクを state.tasks に合流させて打消し線表示
       state.doneTasks.forEach(dt => {
         const dtIdStr = String(dt.id);
-        if (completedTodayIds.has(dtIdStr) && !state.tasks.some(t => String(t.id) === dtIdStr)) {
-          state.tasks.push({ ...dt, status: true, completedDate: getTodayString() });
+        const isCompletedToday = completedTodayIds.has(dtIdStr) || 
+                                (dt.completedDate === todayStr) || 
+                                (dt.status && dt.date === todayStr);
+
+        if (isCompletedToday && !state.tasks.some(t => String(t.id) === dtIdStr)) {
+          state.tasks.push({
+            ...dt,
+            status: true,
+            completedDate: todayStr
+          });
         }
       });
 
+      // 5. キャッシュ保存と画面描画
       saveToCache();
       renderAll();
     }
@@ -2278,8 +2308,13 @@
       // 2. 有効なプロジェクトのみを対象（空名フォルダは完全除外）
       const validProjects = state.projects.filter(p => p && p.name && String(p.name).trim() !== '');
 
-      // 3. 各プロジェクト一覧（ドラッグ＆ドロップ対応）
-      validProjects.forEach(p => {
+      // 3. 表示対象プロジェクトと非表示プロジェクトに分類
+      const hiddenSet = new Set((state.hiddenFolders || []).map(f => String(f)));
+      const visibleProjects = validProjects.filter(p => !hiddenSet.has(String(p.name)) && !hiddenSet.has(String(p.id)));
+      const hiddenProjects = validProjects.filter(p => hiddenSet.has(String(p.name)) || hiddenSet.has(String(p.id)));
+
+      // 各プロジェクト一覧（ドラッグ＆ドロップ対応）
+      visibleProjects.forEach(p => {
         const count = state.tasks.filter(t => !t.status && (t.projectName === p.name || t.projectId === p.id)).length;
         const isInbox = p.name.includes('inbox') || p.name.includes('インボックス');
         list.appendChild(createFolderItem(p.name, p.name, count, isInbox ? 'mail' : 'folder', true, p.id));
@@ -2288,6 +2323,48 @@
       // 4. No Folder (未分類)
       const noFolderCount = state.tasks.filter(t => !t.status && !t.projectName && !t.projectId).length;
       list.appendChild(createFolderItem('No Folder', 'No Folder', noFolderCount, 'folder_off', false, null));
+
+      // 5. 非表示フォルダセクション（1件以上ある場合）
+      if (hiddenProjects.length > 0) {
+        const toggleLi = document.createElement('li');
+        toggleLi.className = 'folder-hidden-toggle';
+        toggleLi.style.cssText = 'padding: 8px 12px; margin-top: 14px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; border-radius: 4px;';
+        toggleLi.innerHTML = `
+          <span style="display: flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined" style="font-size: 14px;">visibility_off</span>
+            <span>非表示フォルダ (${hiddenProjects.length})</span>
+          </span>
+          <span class="material-symbols-outlined" style="font-size: 16px;">${state.showHiddenFoldersSection ? 'expand_less' : 'expand_more'}</span>
+        `;
+        toggleLi.onclick = () => {
+          state.showHiddenFoldersSection = !state.showHiddenFoldersSection;
+          renderSidebarFolders();
+        };
+        list.appendChild(toggleLi);
+
+        if (state.showHiddenFoldersSection) {
+          hiddenProjects.forEach(p => {
+            const count = state.tasks.filter(t => !t.status && (t.projectName === p.name || t.projectId === p.id)).length;
+            const hLi = document.createElement('li');
+            hLi.className = 'folder-item hidden-folder-item' + (state.selectedFolder === p.name ? ' active' : '');
+            hLi.style.cssText = 'opacity: 0.8; background: rgba(0,0,0,0.02); font-size: 12px;';
+            hLi.onclick = () => selectFolder(p.name);
+            hLi.innerHTML = `
+              <div class="folder-item-left" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <span class="material-symbols-outlined folder-icon" style="font-size: 15px; color: #94a3b8;">folder_off</span>
+                <span class="folder-name">${escapeHtml(p.name)}</span>
+              </div>
+              <div class="folder-item-right" style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <span class="folder-badge">${count}</span>
+                <button class="folder-action-btn" onclick="unhideProject('${p.id || ''}', '${escapeHtml(p.name)}', event)" title="サイドバーに再表示する" style="color: #0284c7; opacity: 1;">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">visibility</span>
+                </button>
+              </div>
+            `;
+            list.appendChild(hLi);
+          });
+        }
+      }
     }
 
     function createFolderItem(folderKey, label, count, iconName, isDraggable = false, projectId = null) {
@@ -2474,6 +2551,39 @@
         console.error('フォルダ更新エラー:', err);
         showToast('フォルダ更新の同期に失敗しました');
       }
+    }
+
+    function hideCurrentProjectFromModal() {
+      const projId = document.getElementById('project-edit-id').value;
+      const oldName = document.getElementById('project-edit-oldname').value;
+      closeProjectModal();
+      hideProject(projId, oldName);
+    }
+
+    function hideProject(projectId, projectName) {
+      if (!projectName) return;
+      const key = String(projectName);
+      const set = new Set((state.hiddenFolders || []).map(f => String(f)));
+      set.add(key);
+      if (projectId) set.add(String(projectId));
+      state.hiddenFolders = Array.from(set);
+      saveHiddenFolders(state.hiddenFolders);
+      if (state.selectedFolder === projectName) {
+        state.selectedFolder = 'All';
+      }
+      renderAll();
+      showToast(`フォルダ「${projectName}」を非表示にしました 👁️‍🗨️`);
+    }
+
+    function unhideProject(projectId, projectName, e) {
+      if (e) e.stopPropagation();
+      if (!projectName) return;
+      const nameStr = String(projectName);
+      const idStr = String(projectId || '');
+      state.hiddenFolders = (state.hiddenFolders || []).filter(f => String(f) !== nameStr && String(f) !== idStr);
+      saveHiddenFolders(state.hiddenFolders);
+      renderAll();
+      showToast(`フォルダ「${projectName}」をサイドバーに再表示しました 👁️`);
     }
 
     async function deleteCurrentProjectFromModal() {
@@ -3427,13 +3537,8 @@
         const payloadTask = { ...newTask, id: '' };
         const res = await callBackendApi('saveTask', { taskData: payloadTask });
         if (res && res.tasks) {
-          state.tasks = res.tasks;
-          state.projects = res.projects || state.projects;
-          state.doneTasks = res.doneTasks || state.doneTasks;
-        } else if (res && res.id) {
-          newTask.id = res.id;
+          applyInitialData(res);
         }
-        renderAll();
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('タスク追加エラー:', e);
@@ -3658,13 +3763,8 @@
         if (isNewTask) payloadData.id = ''; // 新規登録時はIDを空にして確実に新規追加APIを呼ぶ
         const res = await callBackendApi('saveTask', { taskData: payloadData });
         if (res && res.tasks) {
-          state.tasks = res.tasks;
-          state.projects = res.projects || state.projects;
-          state.doneTasks = res.doneTasks || state.doneTasks;
-        } else if (res && res.id) {
-          taskData.id = res.id;
+          applyInitialData(res);
         }
-        renderAll();
         showToast('保存しました');
         setSyncStatus('同期完了', false);
       } catch (e) {
@@ -4140,13 +4240,8 @@
         setSyncStatus('保存中...', true);
         const res = await callBackendApi('saveTask', { taskData: cloned });
         if (res && res.tasks) {
-          state.tasks = res.tasks;
-          state.projects = res.projects || state.projects;
-          state.doneTasks = res.doneTasks || state.doneTasks;
-        } else if (res && res.id) {
-          cloned.id = res.id;
+          applyInitialData(res);
         }
-        renderAll();
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('複製エラー:', e);
@@ -4158,40 +4253,33 @@
     }
 
     async function deleteTaskRow(taskId) {
-      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      const taskIdStr = String(taskId);
+      const task = state.tasks.find(t => String(t.id) === taskIdStr) || state.doneTasks.find(t => String(t.id) === taskIdStr);
       if (!task) return;
 
       if (!confirm(`タスク「${task.task}」を削除しますか？`)) return;
 
-      // 1. 画面から即座に削除（楽観的削除）
-      state.tasks = state.tasks.filter(t => t.id !== taskId);
-      state.doneTasks = state.doneTasks.filter(t => t.id !== taskId);
+      // 1. 本日完了タスク一覧からも確実に除去して復活を完全防止
+      removeCompletedTodayId(taskIdStr);
+
+      // 2. 画面から即座に削除（楽観的削除）
+      state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
+      state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
+      saveToCache();
       renderAll();
       showToast('タスクを削除しました 🗑️');
-
-      // 2. ローカルキャッシュからも即座に削除して復活を防止
-      try {
-        const cached = localStorage.getItem(CACHE_DATA_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed) {
-            if (Array.isArray(parsed.tasks)) parsed.tasks = parsed.tasks.filter(t => t.id !== taskId);
-            if (Array.isArray(parsed.doneTasks)) parsed.doneTasks = parsed.doneTasks.filter(t => t.id !== taskId);
-            localStorage.setItem(CACHE_DATA_KEY, JSON.stringify(parsed));
-          }
-        }
-      } catch (cacheErr) {
-        console.warn('キャッシュ削除エラー:', cacheErr);
-      }
 
       // 3. バックエンドへ削除リクエスト送信
       try {
         setSyncStatus('削除中...', true);
-        await callBackendApi('deleteTask', { 
-          taskId, 
+        const res = await callBackendApi('deleteTask', { 
+          taskId: taskIdStr, 
           taskName: task ? task.task : '',
           taskDate: task ? task.date : ''
         });
+        if (res && res.tasks) {
+          applyInitialData(res);
+        }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('削除エラー:', e);
