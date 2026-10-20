@@ -3403,9 +3403,29 @@
       select.onblur = () => finish(false);
     }
 
+    // 新規作成中タスクの通信完了を待機するためのPromiseマップ
+    const pendingCreationPromises = new Map();
+
     // 共通インライン更新関数
     async function updateTaskInline(taskId, updates) {
-      const task = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      let targetId = String(taskId);
+
+      // もし仮ID（作成中タスク）であれば、新規登録通信の完了（本番ID確定）を待機
+      if (targetId.startsWith('tmp_')) {
+        const pending = pendingCreationPromises.get(targetId);
+        if (pending) {
+          setSyncStatus('タスク確定待ち...', true);
+          try {
+            const realId = await pending.promise;
+            if (realId) targetId = String(realId);
+          } catch (e) {
+            console.error('新規作成待ちエラー:', e);
+            return;
+          }
+        }
+      }
+
+      const task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
       if (!task) return;
 
       Object.assign(task, updates);
@@ -3414,7 +3434,10 @@
 
       try {
         setSyncStatus('保存中...', true);
-        await callBackendApi('saveTask', { taskData: task });
+        const res = await callBackendApi('saveTask', { taskData: task });
+        if (res && res.tasks) {
+          applyInitialData(res);
+        }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('インライン保存エラー:', e);
@@ -3447,8 +3470,9 @@
       // 期日（カレンダーで日付が選ばれていればその日付、そうでなければ今日）
       let dueDate = state.selectedDate || getTodayString();
 
+      const tempId = 'tmp_' + Date.now();
       const newTask = {
-        id: 'tmp_' + Date.now(),
+        id: tempId,
         task: text,
         projectName: projName,
         projectId: projId,
@@ -3461,6 +3485,18 @@
         status: false
       };
 
+      // 先行操作（日付変更等）が来ても本番IDを待てるようにPromiseを登録
+      let resolveCreation, rejectCreation;
+      const creationPromise = new Promise((resolve, reject) => {
+        resolveCreation = resolve;
+        rejectCreation = reject;
+      });
+      pendingCreationPromises.set(tempId, {
+        promise: creationPromise,
+        resolve: resolveCreation,
+        reject: rejectCreation
+      });
+
       // 楽観的UI更新
       state.tasks.unshift(newTask);
       if (input) input.value = '';
@@ -3472,14 +3508,27 @@
         setSyncStatus('保存中...', true);
         const payloadTask = { ...newTask, id: '' };
         const res = await callBackendApi('saveTask', { taskData: payloadTask });
+
+        // 本番IDを解決
+        const realId = (res && res.createdTaskId) ? res.createdTaskId : null;
+        if (realId) {
+          newTask.id = realId;
+          resolveCreation(realId);
+        } else {
+          resolveCreation(tempId);
+        }
+        pendingCreationPromises.delete(tempId);
+
         if (res && res.tasks) {
           applyInitialData(res);
         }
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('タスク追加エラー:', e);
+        rejectCreation(e);
+        pendingCreationPromises.delete(tempId);
         // エラー時は画面の一時タスクを削除してロールバック
-        state.tasks = state.tasks.filter(t => t.id !== newTask.id);
+        state.tasks = state.tasks.filter(t => t.id !== tempId);
         renderAll();
         showToast('保存に失敗しました: ' + (e.message || ''));
         setSyncStatus('エラー', false);
@@ -3647,12 +3696,24 @@
       isModalSubmitting = true;
       if (saveBtn) saveBtn.disabled = true;
 
-      const projSelect = document.getElementById('task-project-select');
-      const selectedProj = state.projects.find(p => p.id === projSelect.value);
-      const isNewTask = !id || id.startsWith('tmp_');
+      let targetId = id;
+      if (targetId && String(targetId).startsWith('tmp_')) {
+        const pending = pendingCreationPromises.get(targetId);
+        if (pending) {
+          try {
+            const realId = await pending.promise;
+            if (realId) targetId = String(realId);
+          } catch (e) {
+            console.error('モーダル保存待機エラー:', e);
+          }
+        }
+      }
+
+      const isNewTask = !targetId || String(targetId).startsWith('tmp_');
+      const tempId = isNewTask ? ('tmp_' + Date.now()) : targetId;
 
       const taskData = {
-        id: id || ('tmp_' + Date.now()),
+        id: tempId,
         task: title,
         projectName: selectedProj ? selectedProj.name : '',
         projectId: selectedProj ? selectedProj.id : '',
@@ -3671,9 +3732,20 @@
       closeModal();
 
       if (!isNewTask) {
-        const idx = state.tasks.findIndex(t => t.id === id);
+        const idx = state.tasks.findIndex(t => String(t.id) === targetId);
         if (idx !== -1) state.tasks[idx] = taskData;
       } else {
+        // 新規作成Promiseを登録
+        let resolveCreation, rejectCreation;
+        const creationPromise = new Promise((resolve, reject) => {
+          resolveCreation = resolve;
+          rejectCreation = reject;
+        });
+        pendingCreationPromises.set(tempId, {
+          promise: creationPromise,
+          resolve: resolveCreation,
+          reject: rejectCreation
+        });
         state.tasks.unshift(taskData);
       }
 
@@ -3685,6 +3757,21 @@
         const payloadData = { ...taskData };
         if (isNewTask) payloadData.id = ''; // 新規登録時はIDを空にして確実に新規追加APIを呼ぶ
         const res = await callBackendApi('saveTask', { taskData: payloadData });
+
+        if (isNewTask) {
+          const realId = (res && res.createdTaskId) ? res.createdTaskId : null;
+          const pending = pendingCreationPromises.get(tempId);
+          if (pending) {
+            if (realId) {
+              taskData.id = realId;
+              pending.resolve(realId);
+            } else {
+              pending.resolve(tempId);
+            }
+            pendingCreationPromises.delete(tempId);
+          }
+        }
+
         if (res && res.tasks) {
           applyInitialData(res);
         }
@@ -3692,6 +3779,13 @@
         setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('保存エラー:', e);
+        if (isNewTask) {
+          const pending = pendingCreationPromises.get(tempId);
+          if (pending) {
+            pending.reject(e);
+            pendingCreationPromises.delete(tempId);
+          }
+        }
         // エラー時はロールバック
         state.tasks = previousTasks;
         renderAll();

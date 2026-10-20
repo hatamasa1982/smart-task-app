@@ -601,7 +601,17 @@ function handleApiAction(action, payload) {
     if (data && data.id && !isTempId) {
       result = updateTaskFromApp(data);
     } else {
-      result = addNewTaskFromApp(data);
+      // 仮IDの場合でも、すでに同一タスク名で作成済みの行があるか安全に探索
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const existingLoc = (data && data.task) ? findTaskLocationById(ss, null, data.task, data.date, false) : null;
+      if (existingLoc) {
+        // 既存行が見つかった場合は新規作成せず、その行のIDを取得して更新処理へ
+        const existingId = existingLoc.sheet.getRange(existingLoc.row, CONFIG.COL_ID).getValue();
+        data.id = existingId;
+        result = updateTaskFromApp(data);
+      } else {
+        result = addNewTaskFromApp(data);
+      }
     }
   } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
     result = completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
@@ -893,7 +903,9 @@ function addNewTaskFromApp(taskData) {
   SpreadsheetApp.flush();
   sortAll(sheet);
   
-  return getInitialData();
+  const initialData = getInitialData();
+  initialData.createdTaskId = newId;
+  return initialData;
 }
 
 /**
