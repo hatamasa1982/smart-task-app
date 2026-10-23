@@ -1923,12 +1923,19 @@
     const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
     const VIEW_STATE_KEY = 'smart_task_view_state';
     const COMPLETED_TODAY_KEY = 'smart_task_completed_today_v2';
-    const OLD_BROKEN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
-    const OLD_BROKEN_GAS_URL_2 = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
-    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0h4zgEUwvi8GwoGAMl88lpZ6ajPO4U_p2mvgfp-6uMjmMZdJMwT3KpZ_oogu3-cmt5g/exec';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwRENLfxi6oZn_c14oklIjWr6IvWrLzrmaebVKMN2hCvDDx29EjDKz7zSyqWaOzwgh-og/exec';
+
+    // 過去の古い/遮断されたURLのリスト
+    const KNOWN_OLD_URLS = [
+      'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec',
+      'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec',
+      'https://script.google.com/macros/s/AKfycby0h4zgEUwvi8GwoGAMl88lpZ6ajPO4U_p2mvgfp-6uMjmMZdJMwT3KpZ_oogu3-cmt5g/exec',
+      'https://script.google.com/macros/s/AKfycbz5h7wfwj-l-mUIaR7uPrKTS0bs1kzsfJQlfGJeF2zLJH_6qrQFHQz3cGBF5v9g-KhyUQ/exec'
+    ];
 
     let storedUrl = localStorage.getItem(GAS_URL_KEY);
-    if (!storedUrl || storedUrl === OLD_BROKEN_GAS_URL || storedUrl === OLD_BROKEN_GAS_URL_2) {
+    // 未設定または過去の古いURLの場合は最新の有効な公開URLへ自動マイグレーション
+    if (!storedUrl || KNOWN_OLD_URLS.includes(storedUrl)) {
       storedUrl = DEFAULT_GAS_URL;
       try { localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL); } catch(e){}
     }
