@@ -1922,6 +1922,7 @@
     const CACHE_DATA_KEY = 'smart_task_cached_data';
     const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
     const VIEW_STATE_KEY = 'smart_task_view_state';
+    const COMPLETED_TODAY_KEY = 'smart_task_completed_today_v2';
     const OLD_BROKEN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
     const OLD_BROKEN_GAS_URL_2 = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
     const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0h4zgEUwvi8GwoGAMl88lpZ6ajPO4U_p2mvgfp-6uMjmMZdJMwT3KpZ_oogu3-cmt5g/exec';
@@ -1932,6 +1933,52 @@
       try { localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL); } catch(e){}
     }
     let gasApiUrl = storedUrl;
+
+    // 本日完了タスクIDの取得（24時をまたいだら自動的にクリア）
+    function getCompletedTodayIds() {
+      try {
+        const raw = localStorage.getItem(COMPLETED_TODAY_KEY);
+        if (!raw) return [];
+        const data = JSON.parse(raw);
+        const todayStr = getTodayString();
+        // 24時を過ぎて日付が変わっていたら自動クリア
+        if (!data || data.date !== todayStr) {
+          localStorage.removeItem(COMPLETED_TODAY_KEY);
+          return [];
+        }
+        return Array.isArray(data.ids) ? data.ids.map(String) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // 本日完了タスクIDを追加
+    function addCompletedTodayId(id) {
+      try {
+        const todayStr = getTodayString();
+        const ids = getCompletedTodayIds();
+        const idStr = String(id);
+        if (!ids.includes(idStr)) {
+          ids.push(idStr);
+        }
+        localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
+          date: todayStr,
+          ids: ids
+        }));
+      } catch (e) {}
+    }
+
+    // 本日完了タスクIDを削除（未完了に戻した時や削除した時）
+    function removeCompletedTodayId(id) {
+      try {
+        const todayStr = getTodayString();
+        const ids = getCompletedTodayIds().filter(existing => existing !== String(id));
+        localStorage.setItem(COMPLETED_TODAY_KEY, JSON.stringify({
+          date: todayStr,
+          ids: ids
+        }));
+      } catch (e) {}
+    }
 
     function getHiddenFolders() {
       try {
@@ -2766,11 +2813,23 @@
       if (!tbody) return;
       tbody.innerHTML = '';
 
-      let taskList = state.showCompleted ? [...state.doneTasks] : [...state.tasks];
+      let taskList = [];
 
-      // 通常表示時は未完了タスクのみ表示
-      if (!state.showCompleted) {
-        taskList = taskList.filter(t => !t.status);
+      if (state.showCompleted) {
+        // 完了タスク履歴全件表示モード
+        taskList = [...state.doneTasks];
+      } else {
+        // 通常モード: 未完了タスク一覧
+        const uncompleted = state.tasks.filter(t => !t.status);
+
+        // 本日完了したタスク（24時をまたいだら自動消去）
+        const completedTodayIds = new Set(getCompletedTodayIds());
+        const doneToday = state.doneTasks
+          .filter(t => completedTodayIds.has(String(t.id)))
+          .map(t => ({ ...t, status: true }));
+
+        // 未完了タスク + 当日完了タスク
+        taskList = [...uncompleted, ...doneToday];
       }
 
       // フォルダによるフィルタ
@@ -3613,9 +3672,9 @@
         // --- 完了にする ---
         isCompleting = true;
         task.status = true;
-        // 未完了一覧から即座に削除（スッと消える）
+        addCompletedTodayId(taskIdStr);
+        // 未完了一覧から外し、完了一覧（履歴）の先頭に追加
         state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
-        // 完了一覧（履歴）の先頭に追加
         state.doneTasks.unshift({ ...task });
         showToast('タスクを完了にしました ✅');
       } else {
@@ -3624,6 +3683,7 @@
         if (!task) return;
         isCompleting = false;
         task.status = false;
+        removeCompletedTodayId(taskIdStr);
         state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
         state.tasks.unshift(task);
         showToast('タスクを未完了に戻しました ↩️');
@@ -4367,6 +4427,7 @@
         });
 
         // 2. バックエンドから最新確定データを受け取って画面・キャッシュを完全同期
+        removeCompletedTodayId(targetId);
         if (res && res.tasks) {
           applyInitialData(res);
           showToast('タスクを削除しました 🗑️');
