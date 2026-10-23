@@ -794,8 +794,9 @@ function getInitialData() {
 
   if (doneSheet) {
     const values = doneSheet.getDataRange().getValues();
-    const startRow = Math.max(1, values.length - 200); // 最新200件（末尾から逆順）
-    for (let i = values.length - 1; i >= startRow; i--) {
+    // 2行目（最新の完了タスク）から最大300件を取得
+    const maxRows = Math.min(values.length, 301);
+    for (let i = 1; i < maxRows; i++) {
       let rowId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
       const rowTaskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
       if (rowTaskName !== "") {

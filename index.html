@@ -2272,10 +2272,24 @@
         });
 
       // 3. 完了タスク一覧の更新（完了シートの履歴）
-      state.doneTasks = (data.doneTasks || []).map(t => {
+      const incomingDone = (data.doneTasks || []).map(t => {
         if (t.description) t.description = getContextDisplayName(t.description);
         return t;
       });
+      // 本日完了したタスク（24時をまたいだら自動消去）は手元からも保護し、同期時の反映ラグで消えるのを完全に防止
+      const completedTodayIds = new Set(getCompletedTodayIds());
+      const preservedTodayDone = (state.doneTasks || []).filter(t => completedTodayIds.has(String(t.id)));
+
+      const doneMap = new Map();
+      // まずサーバーから届いたものを登録
+      incomingDone.forEach(t => doneMap.set(String(t.id), t));
+      // 手元の本日完了タスクを合流（万一サーバー側の反映ラグ等で落ちていても確実に維持）
+      preservedTodayDone.forEach(t => {
+        if (!doneMap.has(String(t.id))) {
+          doneMap.set(String(t.id), t);
+        }
+      });
+      state.doneTasks = Array.from(doneMap.values());
 
       // 4. キャッシュ保存と画面描画
       saveToCache();
@@ -3677,7 +3691,8 @@
         addCompletedTodayId(taskIdStr);
         // 未完了一覧から外し、完了一覧（履歴）の先頭に追加
         state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
-        state.doneTasks.unshift({ ...task });
+        state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
+        state.doneTasks.unshift({ ...task, status: true });
         showToast('タスクを完了にしました ✅');
       } else {
         // 完了履歴から未完了に戻す場合
@@ -3687,7 +3702,8 @@
         task.status = false;
         removeCompletedTodayId(taskIdStr);
         state.doneTasks = state.doneTasks.filter(t => String(t.id) !== taskIdStr);
-        state.tasks.unshift(task);
+        state.tasks = state.tasks.filter(t => String(t.id) !== taskIdStr);
+        state.tasks.unshift({ ...task, status: false });
         showToast('タスクを未完了に戻しました ↩️');
       }
 
