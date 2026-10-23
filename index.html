@@ -1922,10 +1922,11 @@
     const CACHE_DATA_KEY = 'smart_task_cached_data';
     const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
     const OLD_BROKEN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
-    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
+    const OLD_BROKEN_GAS_URL_2 = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
+    const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0h4zgEUwvi8GwoGAMl88lpZ6ajPO4U_p2mvgfp-6uMjmMZdJMwT3KpZ_oogu3-cmt5g/exec';
 
     let storedUrl = localStorage.getItem(GAS_URL_KEY);
-    if (!storedUrl || storedUrl === OLD_BROKEN_GAS_URL) {
+    if (!storedUrl || storedUrl === OLD_BROKEN_GAS_URL || storedUrl === OLD_BROKEN_GAS_URL_2) {
       storedUrl = DEFAULT_GAS_URL;
       try { localStorage.setItem(GAS_URL_KEY, DEFAULT_GAS_URL); } catch(e){}
     }
@@ -2008,7 +2009,14 @@
 
         if (getUrl.length < 2000) {
           const res = await fetch(getUrl, { method: 'GET' });
-          const json = await res.json();
+          const text = await res.text();
+          let json;
+          try {
+            json = JSON.parse(text);
+          } catch (jsonErr) {
+            console.error('GAS API レスポンス解析エラー:', text.slice(0, 300));
+            throw new Error('GAS APIからの応答が不正です（Googleログイン要求またはHTMLが返されました）');
+          }
           if (json && json.success) return json.data;
           throw new Error((json && json.error) || 'APIリクエストに失敗しました');
         }
@@ -2019,7 +2027,14 @@
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action, ...payload })
         });
-        const json = await res.json();
+        const text = await res.text();
+        let json;
+        try {
+          json = JSON.parse(text);
+        } catch (jsonErr) {
+          console.error('GAS API レスポンス解析エラー:', text.slice(0, 300));
+          throw new Error('GAS APIからの応答が不正です（Googleログイン要求またはHTMLが返されました）');
+        }
         if (json && json.success) return json.data;
         throw new Error((json && json.error) || 'APIリクエストに失敗しました');
       }
@@ -4272,65 +4287,51 @@
     async function deleteTaskRow(taskId, event) {
       if (event && event.stopPropagation) event.stopPropagation();
 
-      let targetId = String(taskId);
+      const targetId = String(taskId);
+      const task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
+      const taskTitle = task ? (task.task || '無題') : 'このタスク';
 
-      // 1. もし仮ID（作成中タスク）であれば、タスク特定＆本番ID確定を待機
-      let task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
+      if (!confirm(`タスク「${taskTitle}」を削除しますか？`)) return;
 
-      // もしすでに本番IDに切り替わっていて targetId (tmp_...) で見つからない場合、pendingCreationPromises から探索
-      if (!task && targetId.startsWith('tmp_')) {
-        const pending = pendingCreationPromises.get(targetId);
-        if (pending && pending.realId) {
-          targetId = String(pending.realId);
-          task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
-        }
+      // 1. 対象の行を視覚的に半透明化＆操作無効化（処理中であることを明示）
+      const rowEl = document.getElementById(`task-row-${targetId}`);
+      if (rowEl) {
+        rowEl.style.opacity = '0.35';
+        rowEl.style.pointerEvents = 'none';
       }
 
-      if (!task) return;
+      setSyncStatus('削除中...', true);
 
-      if (!confirm(`タスク「${task.task}」を削除しますか？`)) return;
-
-      // 2. 本日完了タスク一覧からも確実に除去して復活を完全防止
-      removeCompletedTodayId(targetId);
-      removeCompletedTodayId(String(taskId));
-
-      // 3. 画面から即座に削除（楽観的削除）
-      state.tasks = state.tasks.filter(t => String(t.id) !== targetId && String(t.id) !== String(taskId));
-      state.doneTasks = state.doneTasks.filter(t => String(t.id) !== targetId && String(t.id) !== String(taskId));
-      saveToCache();
-      renderAll();
-      showToast('タスクを削除しました 🗑️');
-
-      // 4. もし作成通信が進行中であれば、本番ID確定を待ってからバックエンド削除へ進む
-      if (targetId.startsWith('tmp_')) {
-        const pending = pendingCreationPromises.get(targetId);
-        if (pending) {
-          setSyncStatus('タスク確定待ち...', true);
-          try {
-            const realId = await pending.promise;
-            if (realId) targetId = String(realId);
-          } catch (e) {
-            console.warn('新規作成待機中の削除:', e);
-          }
-        }
-      }
-
-      // 5. バックエンドへ削除リクエスト送信
       try {
-        setSyncStatus('削除中...', true);
         const res = await callBackendApi('deleteTask', { 
           taskId: targetId, 
           taskName: task ? task.task : '',
           taskDate: task ? task.date : ''
         });
+
+        // 2. バックエンドから最新確定データを受け取って画面・キャッシュを完全同期
         if (res && res.tasks) {
           applyInitialData(res);
+          showToast('タスクを削除しました 🗑️');
+          setSyncStatus('同期完了', false);
+        } else {
+          // 万一リストが直接返らない場合でも手元から確実に除去
+          state.tasks = state.tasks.filter(t => String(t.id) !== targetId);
+          state.doneTasks = state.doneTasks.filter(t => String(t.id) !== targetId);
+          saveToCache();
+          renderAll();
+          showToast('タスクを削除しました 🗑️');
+          setSyncStatus('同期完了', false);
         }
-        setSyncStatus('同期完了', false);
       } catch (e) {
         console.error('削除エラー:', e);
-        showToast('削除の同期に失敗しました');
+        if (rowEl) {
+          rowEl.style.opacity = '1';
+          rowEl.style.pointerEvents = 'auto';
+        }
+        showToast('削除に失敗しました');
         setSyncStatus('エラー', false);
+        alert('タスクの削除に失敗しました。\n通信状況やGAS URLをご確認ください。\n\n詳細: ' + e.message);
       }
     }
 

@@ -749,7 +749,18 @@ function getInitialData() {
     if (taskSheet) {
       const values = taskSheet.getDataRange().getValues();
       for (let i = 1; i < values.length; i++) {
-        if (values[i][CONFIG.COL_ID - 1] !== "") {
+        let currentId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
+        const taskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
+        
+        // タスク名が存在する有効な行を対象とする
+        if (taskName !== "") {
+          // IDが空欄またはtmp_で始まっている場合、正規の8桁UUIDを発行してシートのA列を恒久修復
+          if (!currentId || currentId.startsWith("tmp_")) {
+            currentId = Utilities.getUuid().split("-")[0];
+            taskSheet.getRange(i + 1, CONFIG.COL_ID).setValue(currentId);
+            values[i][CONFIG.COL_ID - 1] = currentId;
+          }
+
           const taskObj = parseRowToTask(values[i]);
           // コンテキストIDが入っている場合は名前に解決
           if (taskObj.description && idToContextName[taskObj.description]) {
@@ -785,14 +796,22 @@ function getInitialData() {
     const values = doneSheet.getDataRange().getValues();
     const startRow = Math.max(1, values.length - 200); // 最新200件（末尾から逆順）
     for (let i = values.length - 1; i >= startRow; i--) {
-      const rowId = String(values[i][CONFIG.COL_ID - 1] || "");
-      if (rowId !== "" && !seenDoneIds.has(rowId)) {
-        const taskObj = parseRowToTask(values[i]);
-        if (taskObj.description && idToContextName[taskObj.description]) {
-          taskObj.description = idToContextName[taskObj.description];
+      let rowId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
+      const rowTaskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
+      if (rowTaskName !== "") {
+        if (!rowId || rowId.startsWith("tmp_")) {
+          rowId = Utilities.getUuid().split("-")[0];
+          doneSheet.getRange(i + 1, CONFIG.COL_ID).setValue(rowId);
+          values[i][CONFIG.COL_ID - 1] = rowId;
         }
-        doneTasks.push(taskObj);
-        seenDoneIds.add(rowId);
+        if (!seenDoneIds.has(rowId)) {
+          const taskObj = parseRowToTask(values[i]);
+          if (taskObj.description && idToContextName[taskObj.description]) {
+            taskObj.description = idToContextName[taskObj.description];
+          }
+          doneTasks.push(taskObj);
+          seenDoneIds.add(rowId);
+        }
       }
     }
   }
@@ -1182,9 +1201,11 @@ function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   const location = findTaskLocationById(ss, taskId, taskName, fallbackDate, true);
   
   if (!location) {
-    // 一時ID（tmp_...）または見つからない場合でも、すでに削除されたとみなしてエラーにせず同期
-    console.warn("指定されたタスクが見つかりませんでした（すでに削除済みの可能性があります）。ID: " + taskId);
-    return getInitialData();
+    console.warn("指定されたタスクが見つかりませんでした。ID: " + taskId + ", Task: " + taskName);
+    const initialData = getInitialData();
+    initialData.deletedTaskId = taskId;
+    initialData.deleteNotFound = true;
+    return initialData;
   }
   
   const { sheet, row } = location;
@@ -1192,7 +1213,10 @@ function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   SpreadsheetApp.flush();
   sortAll(sheet);
   
-  return getInitialData();
+  const initialData = getInitialData();
+  initialData.deletedTaskId = taskId;
+  initialData.deleteSuccess = true;
+  return initialData;
 }
 
 /**
