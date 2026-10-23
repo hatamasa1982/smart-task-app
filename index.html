@@ -2869,8 +2869,10 @@
       // 統計更新
       const activeCount = state.tasks.filter(t => !t.status).length;
       const completedCount = state.doneTasks.length;
+      const displayedActive = taskList.filter(t => !t.status).length;
+      const displayedDone = taskList.filter(t => t.status).length;
       if (footerStats) {
-        footerStats.innerText = `Displayed Tasks: ${taskList.length} active (Total: ${activeCount} active, ${completedCount} completed)`;
+        footerStats.innerText = `Displayed Tasks: ${displayedActive} active${displayedDone > 0 ? `, ${displayedDone} completed today` : ''} (Total: ${activeCount} active, ${completedCount} completed)`;
       }
 
       if (taskList.length === 0) {
@@ -3836,6 +3838,10 @@
 
       const isNewTask = !targetId || String(targetId).startsWith('tmp_');
       const tempId = isNewTask ? ('tmp_' + Date.now()) : targetId;
+
+      const projSelect = document.getElementById('task-project-select');
+      const selectedProjId = projSelect ? projSelect.value : '';
+      const selectedProj = state.projects.find(p => String(p.id) === String(selectedProjId));
 
       const taskData = {
         id: tempId,
