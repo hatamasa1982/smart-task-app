@@ -1921,6 +1921,7 @@
     const GAS_URL_KEY = 'smart_task_gas_api_url';
     const CACHE_DATA_KEY = 'smart_task_cached_data';
     const HIDDEN_FOLDERS_KEY = 'smart_task_hidden_folders';
+    const VIEW_STATE_KEY = 'smart_task_view_state';
     const OLD_BROKEN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzLADcf3srQSS6ibERpBdE4wiJxz0I2zEk0DSrqD8BodaYiXWjjfY5tq_COjDLcYTtTRQ/exec';
     const OLD_BROKEN_GAS_URL_2 = 'https://script.google.com/macros/s/AKfycbzTCg5WJi6H9DkGPtuMgMriDOwYG8QC6D7wpovybSixNoR6vH43slGnlut3GHBibkCThw/exec';
     const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby0h4zgEUwvi8GwoGAMl88lpZ6ajPO4U_p2mvgfp-6uMjmMZdJMwT3KpZ_oogu3-cmt5g/exec';
@@ -1947,6 +1948,41 @@
       } catch (e) {}
     }
 
+    // 表示状態（選択中の画面・タブ・日付等）の保存
+    function saveViewState() {
+      try {
+        const viewData = {
+          railMode: state.railMode,
+          selectedFolder: state.selectedFolder,
+          selectedContext: state.selectedContext,
+          selectedDate: state.selectedDate,
+          showCompleted: state.showCompleted,
+          sortField: state.sortField,
+          calYear: state.calYear,
+          calMonth: state.calMonth
+        };
+        localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewData));
+      } catch (e) {}
+    }
+
+    // 表示状態の復元
+    function loadViewState() {
+      try {
+        const raw = localStorage.getItem(VIEW_STATE_KEY);
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.railMode) state.railMode = d.railMode;
+          if (d.selectedFolder !== undefined) state.selectedFolder = d.selectedFolder;
+          if (d.selectedContext !== undefined) state.selectedContext = d.selectedContext;
+          if (d.selectedDate !== undefined) state.selectedDate = d.selectedDate;
+          if (d.showCompleted !== undefined) state.showCompleted = d.showCompleted;
+          if (d.sortField) state.sortField = d.sortField;
+          if (d.calYear) state.calYear = d.calYear;
+          if (d.calMonth !== undefined) state.calMonth = d.calMonth;
+        }
+      } catch (e) {}
+    }
+
     // アプリ状態
     let state = {
       tasks: [],
@@ -1968,7 +2004,9 @@
 
     // 初期化
     window.addEventListener('DOMContentLoaded', async () => {
+      loadViewState();
       loadCachedData();
+      renderAll();
       await fetchInitialData();
     });
 
@@ -2227,6 +2265,16 @@
     // レンダリング全般
     // ----------------------------------
     function renderAll() {
+      // ナビゲーションレイルのボタン選択状態を同期
+      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(`rail-btn-${state.railMode}`);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const azBtn = document.getElementById('btn-sort-folders-az');
+      if (azBtn) {
+        azBtn.style.display = (state.railMode === 'folders') ? 'inline-flex' : 'none';
+      }
+
       if (state.railMode === 'contexts') {
         renderSidebarContexts();
       } else if (state.railMode === 'calendar') {
@@ -2592,6 +2640,7 @@
       state.selectedContext = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
+      saveViewState();
       if (window.innerWidth <= 768) closeSidebar();
       renderAll();
     }
@@ -2686,6 +2735,7 @@
       state.selectedFolder = 'All';
       state.selectedDate = null;
       state.showCompleted = false;
+      saveViewState();
       if (window.innerWidth <= 768) closeSidebar();
       renderAll();
     }
@@ -4047,6 +4097,7 @@
     // ナビゲーションレイル切り替え
     function setRailMode(mode) {
       state.railMode = mode;
+      saveViewState();
       document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
       const activeBtn = document.getElementById(`rail-btn-${mode}`);
       if (activeBtn) activeBtn.classList.add('active');
@@ -4080,6 +4131,7 @@
         state.calMonth = 0;
         state.calYear += 1;
       }
+      saveViewState();
       renderMiniCalendarSidebar();
     }
 
@@ -4087,6 +4139,7 @@
       const now = new Date();
       state.calYear = now.getFullYear();
       state.calMonth = now.getMonth();
+      saveViewState();
       renderMiniCalendarSidebar();
     }
 
@@ -4189,6 +4242,7 @@
       state.selectedDate = dateStr;
       state.selectedFolder = 'All';
       state.selectedContext = 'All';
+      saveViewState();
       if (window.innerWidth <= 768) closeSidebar();
       renderBreadcrumb();
       renderTaskTable();
@@ -4197,6 +4251,7 @@
 
     function clearDateFilter() {
       state.selectedDate = null;
+      saveViewState();
       renderBreadcrumb();
       renderTaskTable();
       renderMiniCalendarSidebar();
@@ -4204,6 +4259,7 @@
 
     function toggleCompletedTasksView() {
       state.showCompleted = !state.showCompleted;
+      saveViewState();
       if (window.innerWidth <= 768) closeSidebar();
       renderBreadcrumb();
       renderTaskTable();
@@ -4239,6 +4295,7 @@
       state.showCompleted = false;
       state.searchQuery = '';
       setRailMode('folders');
+      saveViewState();
       renderAll();
     }
 
