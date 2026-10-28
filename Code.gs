@@ -52,7 +52,7 @@ function onEditTrigger(e) {
   if (isTaskSheet(sheetName) && val !== "") {
     const idRange = sheet.getRange(row, CONFIG.COL_ID);
     if (!idRange.getValue()) {
-      const lastCol = sheet.getLastColumn();
+      const lastCol = Math.max(sheet.getLastColumn(), CONFIG.COL_END_TIME);
       const rowRange = sheet.getRange(row, 1, 1, lastCol);
       const rowValues = rowRange.getValues()[0];
       
@@ -138,13 +138,34 @@ function getProjectTypeById(ss, projectId) {
 }
 
 /**
+ * プロジェクトIDからプロジェクト名を取得するヘルパー関数
+ */
+function getProjectNameById(ss, projectId) {
+  if (!projectId) return "";
+  const projectSheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
+  if (!projectSheet) return "";
+  const values = projectSheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][0]).trim() === String(projectId).trim()) {
+      return String(values[i][1] || "").trim();
+    }
+  }
+  return "";
+}
+
+/**
  * タスク完了時のメイン処理
  */
 function processTaskCompletion(ss, sheet, row) {
   // A列から一番右の列まで全てのデータを取得する
-  const lastCol = sheet.getLastColumn();
+  const lastCol = Math.max(sheet.getLastColumn(), CONFIG.COL_END_TIME);
   const rowRange = sheet.getRange(row, 1, 1, lastCol);
   const rowData = rowRange.getValues()[0];
+
+  // E列（プロジェクト名）が空の場合はプロジェクトIDから補完
+  if (!rowData[CONFIG.COL_PROJECT_NAME - 1] && rowData[CONFIG.COL_PROJECT - 1]) {
+    rowData[CONFIG.COL_PROJECT_NAME - 1] = getProjectNameById(ss, rowData[CONFIG.COL_PROJECT - 1]);
+  }
 
   const repeatType = rowData[CONFIG.COL_REPEAT - 1];
   const sheetName = sheet.getName();
@@ -157,10 +178,11 @@ function processTaskCompletion(ss, sheet, row) {
     console.error("カレンダー作成エラー: " + err.message);
   }
 
+  let repeatedTaskObj = null;
   try {
     const rtTypeStr = String(repeatType || "").trim();
     if (rtTypeStr !== "" && rtTypeStr.toUpperCase() !== "NONE") {
-      handleRepeatTask(sheet, rowData, rtTypeStr);
+      repeatedTaskObj = handleRepeatTask(sheet, rowData, rtTypeStr);
     }
   } catch (err) {
     console.error("リピート作成エラー: " + err.message);
@@ -168,10 +190,11 @@ function processTaskCompletion(ss, sheet, row) {
 
   // --- 完了転記と削除 ---
   try {
-    const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME) || ss.insertSheet(CONFIG.DONE_SHEET_NAME);
-
-    // ヘッダーとARRAYFORMULAの初期確認・設定
-    setupDoneSheetFormat(doneSheet);
+    let doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
+    if (!doneSheet) {
+      doneSheet = ss.insertSheet(CONFIG.DONE_SHEET_NAME);
+      setupDoneSheetFormat(doneSheet);
+    }
 
     // 常に2行目の位置に新しい空行を自動挿入（最新の完了タスクを一番上に配置するため）
     doneSheet.insertRowBefore(2);
@@ -181,27 +204,21 @@ function processTaskCompletion(ss, sheet, row) {
     newDoneRow[CONFIG.COL_PROJECT_NAME - 1] = "";
     newDoneRow[CONFIG.COL_STATUS - 1] = true;
 
-    // 2行目に転記
+    // 2行目に一括転記
     doneSheet.getRange(2, 1, 1, newDoneRow.length).setValues([newDoneRow]);
 
-    // 書式・チェックボックスの設定
-    doneSheet.getRange(2, CONFIG.COL_STATUS).insertCheckboxes();
-    doneSheet.getRange(2, CONFIG.COL_STATUS).setValue(true);
-    doneSheet.getRange(2, CONFIG.COL_DATE_E).setNumberFormat("M/d(ddd)");
-    doneSheet.getRange(2, CONFIG.COL_START_TIME).setNumberFormat("hh:mm");
-    doneSheet.getRange(2, CONFIG.COL_END_TIME).setNumberFormat("hh:mm");
-
-    SpreadsheetApp.flush();
+    // 元のシートから該当行を削除
     sheet.deleteRow(row);
 
-    ss.toast("タスクを完了し、完了タスクの一番上へ移動しました。", "処理完了");
-
-    // 完了タスクが移動・削除された後、該当シートの並び替えを実行する
-    sortAll(sheet);
-
+    // リピートタスクが新規追加された場合のみ並び替えを実行（単なる行削除時は既存の並び順が維持されるため不要）
+    if (repeatedTaskObj) {
+      sortAll(sheet);
+    }
   } catch (err) {
-    ss.toast("転記/削除エラー: " + err.message, "エラー");
+    console.error("転記/削除エラー: " + err.message);
   }
+
+  return repeatedTaskObj;
 }
 
 /**
@@ -218,8 +235,7 @@ function handleRepeatTask(sheet, rowData, repeatType) {
   } else {
     const currentDate = new Date(rawDate);
     if (isNaN(currentDate.getTime())) {
-      SpreadsheetApp.getActiveSpreadsheet().toast("【警告】期日が日付形式ではないか、入力されていないため、次回のタスクが作られませんでした。", "エラー");
-      return;
+      return null;
     }
     const calculatedDate = new Date(currentDate.getTime());
     if (rType === "DAILY") calculatedDate.setDate(calculatedDate.getDate() + 1);
@@ -247,26 +263,25 @@ function handleRepeatTask(sheet, rowData, repeatType) {
   // 本当にデータが有る行の下に追加
   const targetRow = getRealLastRow(sheet) + 1;
   sheet.getRange(targetRow, 1, 1, newRowData.length).setValues([newRowData]);
-
-  // ARRAYFORMULAの自動展開を妨げないように、追加された行のプロジェクト名(E列)のセルを空っぽに戻します
-  sheet.getRange(targetRow, CONFIG.COL_PROJECT_NAME).clearContent();
-
-  sheet.getRange(targetRow, CONFIG.COL_STATUS).insertCheckboxes();
   sheet.getRange(targetRow, CONFIG.COL_DATE_E).setNumberFormat("M/d(ddd)");
-  sheet.getRange(targetRow, CONFIG.COL_START_TIME).setNumberFormat("hh:mm");
-  sheet.getRange(targetRow, CONFIG.COL_END_TIME).setNumberFormat("hh:mm");
+
+  const taskObj = parseRowToTask(newRowData);
+  taskObj.projectName = String(rowData[CONFIG.COL_PROJECT_NAME - 1] || "");
+  return taskObj;
 }
 
 /**
- * ARRAYFORMULAなどで空白に見えるセルを除き、A列で本当に値が入っている最後の行を取得する関数
+ * ARRAYFORMULAなどで空白に見えるセルを除き、A列またはG列で本当に値が入っている最後の行を取得する関数
  */
 function getRealLastRow(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 1) return 1;
 
-  const values = sheet.getRange(1, 1, lastRow, 1).getValues(); // A列を取得
+  const values = sheet.getRange(1, 1, lastRow, CONFIG.COL_TASK).getValues();
   for (let i = values.length - 1; i >= 0; i--) {
-    if (values[i][0] !== "") {
+    const idVal = values[i][CONFIG.COL_ID - 1];
+    const taskVal = values[i][CONFIG.COL_TASK - 1];
+    if (idVal !== "" || taskVal !== "") {
       return i + 1; // 値が入っている最後の行番号を返す
     }
   }
@@ -311,7 +326,9 @@ function sendIcsToOutlook(title, start, end, description) {
 
   if (!outlookEmail) {
     console.warn("【警告】スクリプトプロパティ 'OUTLOOK_EMAIL' が設定されていないため、Outlookへの予定送信をスキップしました。");
-    SpreadsheetApp.getActiveSpreadsheet().toast("Outlookメールアドレス(OUTLOOK_EMAIL)が未設定のため予定メールは送信されませんでした。", "通知");
+    try {
+      SpreadsheetApp.getActiveSpreadsheet().toast("Outlookメールアドレス(OUTLOOK_EMAIL)が未設定のため予定メールは送信されませんでした。", "通知");
+    } catch (e) {}
     return;
   }
 
@@ -386,7 +403,8 @@ function escapeIcsText(text) {
 }
 
 /**
- * プロジェクト名の一括置換
+ * プロジェクト名変更時の同期処理
+ * E列はE1セルのARRAYFORMULA（VLOOKUP）で自動参照されるため、E2以降の値クリアのみで安全に最新化される
  */
 function syncProjectNameChange(ss, oldName, newName) {
   const sheetsToUpdate = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME, CONFIG.DONE_SHEET_NAME];
@@ -398,11 +416,7 @@ function syncProjectNameChange(ss, oldName, newName) {
     const lastRow = targetSheet.getLastRow();
     if (lastRow < 2) return;
 
-    // プロジェクト名が存在する列の一括置換
-    const range = targetSheet.getRange(2, CONFIG.COL_PROJECT_NAME, lastRow - 1, 1);
-    const values = range.getValues();
-    const updatedValues = values.map(row => [row[0] === oldName ? newName : row[0]]);
-    range.setValues(updatedValues);
+    targetSheet.getRange(2, CONFIG.COL_PROJECT_NAME, lastRow - 1, 1).clearContent();
   });
 }
 
@@ -483,43 +497,37 @@ function sortBizSheet() {
 }
 
 /**
- * 指定シート（またはアクティブシート）を「完了状態 → 期日 (昇順) → コンテキスト (ID/マスター定義順)」で並び替える関数
+ * 指定シート（またはアクティブシート）を「完了状態 → 期日 (昇順) → 開始時間 → コンテキスト (ID/マスター定義順)」で高速に並び替える関数
+ * ※ 毎回フィルターを削除・再作成すると1〜2秒の遅延が発生するため、既存フィルターを保持したままデータ領域のみを一括更新する
  */
-function sortByDateAndContext(targetSheet) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = targetSheet || ss.getActiveSheet();
-  if (!sheet || !isTaskSheet(sheet.getName())) return;
+let cachedContextOrderMap = null;
 
-  // コンテキストシートから優先度マップ（コンテキスト名 -> ID/順序）を作成
+function getContextOrderMap(ss) {
+  if (cachedContextOrderMap) return cachedContextOrderMap;
+  cachedContextOrderMap = new Map([
+    ["最優先", 100],
+    ["優先", 101],
+    ["通常", 102],
+    ["翌日以降可", 103],
+    ["連絡待ち", 104],
+    ["簡単", 105],
+    ["隙間時間", 106]
+  ]);
   const contextSheet = ss.getSheetByName(CONFIG.CONTEXT_SHEET_NAME);
-  const contextOrderMap = new Map();
   if (contextSheet) {
     const cValues = contextSheet.getDataRange().getValues();
     for (let i = 1; i < cValues.length; i++) {
-      const cId = Number(cValues[i][0]) || (i * 10); // A列: コンテキストID (100, 101...)
-      const cName = String(cValues[i][1]).trim();     // B列: コンテキスト名
+      const cId = Number(cValues[i][0]) || (i * 10);
+      const cName = String(cValues[i][1]).trim();
       if (cName) {
-        contextOrderMap.set(cName, cId);
+        cachedContextOrderMap.set(cName, cId);
       }
     }
   }
+  return cachedContextOrderMap;
+}
 
-  // 既存のフィルターを一時解除（安全に実行）
-  try {
-    const existingFilter = sheet.getFilter();
-    if (existingFilter) existingFilter.remove();
-  } catch (e) {
-    console.warn("フィルター解除スキップ: " + e.message);
-  }
-
-  const lastRow = getRealLastRow(sheet);
-  const lastCol = sheet.getLastColumn();
-  if (lastRow < 2) return;
-
-  const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
-  const values = range.getValues();
-
-  // 多重ソート（1. 完了状態 -> 2. 日付 -> 3. 開始時間 -> 4. コンテキストID）
+function sortTaskRowsInMemory(values, contextOrderMap) {
   values.sort((a, b) => {
     // 1. 完了状態 (B列)
     const statusA = (a[CONFIG.COL_STATUS - 1] === true || String(a[CONFIG.COL_STATUS - 1]).toUpperCase() === "TRUE") ? 1 : 0;
@@ -548,22 +556,33 @@ function sortByDateAndContext(targetSheet) {
   for (let i = 0; i < values.length; i++) {
     values[i][CONFIG.COL_PROJECT_NAME - 1] = "";
   }
+  return values;
+}
 
-  range.setValues(values);
+function sortByDateAndContext(targetSheet) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = targetSheet || ss.getActiveSheet();
+  if (!sheet || !isTaskSheet(sheet.getName())) return;
 
-  // フィルターを再作成（安全に実行）
-  try {
-    const filterRange = sheet.getRange(1, 1, lastRow, lastCol);
-    filterRange.createFilter();
-  } catch (e) {
-    console.warn("フィルター再作成スキップ: " + e.message);
+  const sheetLastRow = sheet.getLastRow();
+  if (sheetLastRow < 2) return;
+  const lastCol = Math.max(sheet.getLastColumn(), CONFIG.COL_END_TIME);
+
+  const allValues = sheet.getRange(2, 1, sheetLastRow - 1, lastCol).getValues();
+  let realCount = 0;
+  for (let i = allValues.length - 1; i >= 0; i--) {
+    if (allValues[i][CONFIG.COL_ID - 1] !== "" || allValues[i][CONFIG.COL_TASK - 1] !== "") {
+      realCount = i + 1;
+      break;
+    }
   }
+  if (realCount < 2) return;
 
-  try {
-    ss.toast(`「${sheet.getName()}」シートを並び替えました。`, "処理完了");
-  } catch (e) {
-    // Web APIからの実行時はtoastが使用できないため無視
-  }
+  const values = allValues.slice(0, realCount);
+  const contextOrderMap = getContextOrderMap(ss);
+  sortTaskRowsInMemory(values, contextOrderMap);
+
+  sheet.getRange(2, 1, realCount, lastCol).setValues(values);
 }
 
 function sortAll(sheet) {
@@ -580,7 +599,7 @@ function sortAll(sheet) {
 
 function sortAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME].forEach(name => {
+  [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME].forEach(name => {
     const s = ss.getSheetByName(name);
     if (s) sortByDateAndContext(s);
   });
@@ -588,54 +607,48 @@ function sortAllSheets() {
 
 /**
  * 外部Webアプリ（GitHub Pages等）からのAPI処理共通ディスパッチャー
+ * 更新系リクエストは LockService で排他制御し、同時リクエストによるデータの先祖返り・競合を完全防止する
  */
 function handleApiAction(action, payload) {
   payload = payload || {};
-  let result;
 
   if (action === 'getInitialData') {
-    result = getInitialData();
-  } else if (action === 'saveTask') {
-    const data = payload.taskData;
-    const isTempId = data && data.id && String(data.id).startsWith('tmp_');
-    if (data && data.id && !isTempId) {
-      result = updateTaskFromApp(data);
-    } else {
-      // 仮IDの場合でも、すでに同一タスク名で作成済みの行があるか安全に探索
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
-      const existingLoc = (data && data.task) ? findTaskLocationById(ss, null, data.task, data.date, false) : null;
-      if (existingLoc) {
-        // 既存行が見つかった場合は新規作成せず、その行のIDを取得して更新処理へ
-        const existingId = existingLoc.sheet.getRange(existingLoc.row, CONFIG.COL_ID).getValue();
-        data.id = existingId;
-        result = updateTaskFromApp(data);
-      } else {
-        result = addNewTaskFromApp(data);
-      }
-    }
-  } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
-    result = completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
-  } else if (action === 'deleteTask') {
-    result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
-  } else if (action === 'saveProject') {
-    if (payload.projectData && payload.projectData.id) {
-      result = updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
-    } else {
-      result = addNewProjectFromApp(payload.projectData);
-    }
-  } else if (action === 'deleteProject') {
-    result = deleteProjectFromApp(payload.projectId, payload.projectName);
-  } else if (action === 'saveContext') {
-    result = saveContextFromApp(payload.contextData);
-  } else if (action === 'deleteContext') {
-    result = deleteContextFromApp(payload.contextId);
-  } else if (action === 'updateSortOrder') {
-    result = updateSortOrderFromApp(payload.idList);
-  } else {
-    throw new Error('未定義のアクションです: ' + action);
+    return getInitialData();
   }
 
-  return result;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    let result;
+    if (action === 'saveTask') {
+      result = upsertTaskFromApp(payload.taskData);
+    } else if (action === 'toggleTaskStatus' || action === 'completeTask') {
+      result = completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
+    } else if (action === 'uncompleteTask') {
+      result = uncompleteTaskFromApp(payload.taskId, payload.taskData);
+    } else if (action === 'deleteTask') {
+      result = deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
+    } else if (action === 'saveProject') {
+      if (payload.projectData && payload.projectData.id && !payload.projectData.isNew && !String(payload.projectData.id).startsWith('p_')) {
+        result = updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
+      } else {
+        result = addNewProjectFromApp(payload.projectData);
+      }
+    } else if (action === 'deleteProject') {
+      result = deleteProjectFromApp(payload.projectId, payload.projectName);
+    } else if (action === 'saveContext') {
+      result = saveContextFromApp(payload.contextData);
+    } else if (action === 'deleteContext') {
+      result = deleteContextFromApp(payload.contextId);
+    } else if (action === 'updateSortOrder') {
+      result = updateSortOrderFromApp(payload.idList);
+    } else {
+      throw new Error('未定義のアクションです: ' + action);
+    }
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -703,17 +716,22 @@ function getInitialData() {
   // 1. プロジェクトデータ取得（名前が入力されている行のみ対象）
   const projectSheet = ss.getSheetByName(CONFIG.PROJECT_SHEET_NAME);
   const projects = [];
+  const idToProjectName = {};
+  const idToProjectType = {};
   if (projectSheet) {
     const values = projectSheet.getDataRange().getValues();
     for (let i = 1; i < values.length; i++) {
       const pId = String(values[i][0] || "").trim();
       const pName = String(values[i][1] || "").trim();
+      const pType = String(values[i][2] || "Private").trim();
       if (pId !== "" && pName !== "") {
         projects.push({
           id: pId,
           name: pName,
-          type: String(values[i][2] || "Private")
+          type: pType
         });
+        idToProjectName[pId] = pName;
+        idToProjectType[pId] = pType;
       }
     }
   }
@@ -739,15 +757,19 @@ function getInitialData() {
     }
   }
 
-  // 2. タスクデータ取得 (Private, Biz, 旧タスクシートからタスクを取得)
+  // 2. タスクデータ取得 (Private, Bizシートからタスクを取得)
   const tasks = [];
-  const taskSheetNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME];
+  const taskSheetNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME];
   const lingeringDoneTasks = [];
+  const seenActiveIds = new Set();
   
   taskSheetNames.forEach(name => {
     const taskSheet = ss.getSheetByName(name);
     if (taskSheet) {
-      const values = taskSheet.getDataRange().getValues();
+      const lastRow = taskSheet.getLastRow();
+      if (lastRow < 2) return;
+      const lastCol = Math.max(taskSheet.getLastColumn(), CONFIG.COL_END_TIME);
+      const values = taskSheet.getRange(1, 1, lastRow, lastCol).getValues();
       for (let i = 1; i < values.length; i++) {
         let currentId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
         const taskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
@@ -762,6 +784,10 @@ function getInitialData() {
           }
 
           const taskObj = parseRowToTask(values[i]);
+          // ARRAYFORMULAの再計算前でも確実にプロジェクト名を解決
+          if (!taskObj.projectName && taskObj.projectId && idToProjectName[taskObj.projectId]) {
+            taskObj.projectName = idToProjectName[taskObj.projectId];
+          }
           // コンテキストIDが入っている場合は名前に解決
           if (taskObj.description && idToContextName[taskObj.description]) {
             taskObj.description = idToContextName[taskObj.description];
@@ -769,19 +795,22 @@ function getInitialData() {
           // シート名に基づくデフォルト補正（未指定の場合）
           if (name === CONFIG.BIZ_SHEET_NAME && !taskObj.type) {
             taskObj.type = "Biz";
+          } else if (taskObj.projectId && idToProjectType[taskObj.projectId] && !values[i][CONFIG.COL_TYPE - 1]) {
+            taskObj.type = idToProjectType[taskObj.projectId];
           }
           // 未完了タスクシート内に完了済み行が残っていた場合は未完了一覧に含めず完了側に退避
           if (taskObj.status) {
             lingeringDoneTasks.push(taskObj);
-          } else {
+          } else if (!seenActiveIds.has(currentId)) {
             tasks.push(taskObj);
+            seenActiveIds.add(currentId);
           }
         }
       }
     }
   });
   
-  // 3. 完了タスクデータ取得 (先頭2行目以降の最新履歴から直近100件)
+  // 3. 完了タスクデータ取得 (先頭2行目以降の最新履歴から最大200件を高速取得)
   const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
   const doneTasks = [];
   const seenDoneIds = new Set();
@@ -793,25 +822,32 @@ function getInitialData() {
   });
 
   if (doneSheet) {
-    const values = doneSheet.getDataRange().getValues();
-    // 2行目（最新の完了タスク）から最大300件を取得
-    const maxRows = Math.min(values.length, 301);
-    for (let i = 1; i < maxRows; i++) {
-      let rowId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
-      const rowTaskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
-      if (rowTaskName !== "") {
-        if (!rowId || rowId.startsWith("tmp_")) {
-          rowId = Utilities.getUuid().split("-")[0];
-          doneSheet.getRange(i + 1, CONFIG.COL_ID).setValue(rowId);
-          values[i][CONFIG.COL_ID - 1] = rowId;
-        }
-        if (!seenDoneIds.has(rowId)) {
-          const taskObj = parseRowToTask(values[i]);
-          if (taskObj.description && idToContextName[taskObj.description]) {
-            taskObj.description = idToContextName[taskObj.description];
+    const doneLastRow = doneSheet.getLastRow();
+    if (doneLastRow >= 2) {
+      const maxRows = Math.min(doneLastRow, 201);
+      const lastCol = Math.max(doneSheet.getLastColumn(), CONFIG.COL_END_TIME);
+      const values = doneSheet.getRange(1, 1, maxRows, lastCol).getValues();
+      for (let i = 1; i < values.length; i++) {
+        let rowId = String(values[i][CONFIG.COL_ID - 1] || "").trim();
+        const rowTaskName = String(values[i][CONFIG.COL_TASK - 1] || "").trim();
+        if (rowTaskName !== "") {
+          if (!rowId || rowId.startsWith("tmp_")) {
+            rowId = Utilities.getUuid().split("-")[0];
+            doneSheet.getRange(i + 1, CONFIG.COL_ID).setValue(rowId);
+            values[i][CONFIG.COL_ID - 1] = rowId;
           }
-          doneTasks.push(taskObj);
-          seenDoneIds.add(rowId);
+          if (!seenDoneIds.has(rowId) && !seenActiveIds.has(rowId)) {
+            const taskObj = parseRowToTask(values[i]);
+            taskObj.status = true;
+            if (!taskObj.projectName && taskObj.projectId && idToProjectName[taskObj.projectId]) {
+              taskObj.projectName = idToProjectName[taskObj.projectId];
+            }
+            if (taskObj.description && idToContextName[taskObj.description]) {
+              taskObj.description = idToContextName[taskObj.description];
+            }
+            doneTasks.push(taskObj);
+            seenDoneIds.add(rowId);
+          }
         }
       }
     }
@@ -831,7 +867,7 @@ function getInitialData() {
 function parseRowToTask(row) {
   return {
     id: String(row[CONFIG.COL_ID - 1]),
-    status: String(row[CONFIG.COL_STATUS - 1]).toUpperCase() === "TRUE",
+    status: row[CONFIG.COL_STATUS - 1] === true || String(row[CONFIG.COL_STATUS - 1]).toUpperCase() === "TRUE",
     repeat: String(row[CONFIG.COL_REPEAT - 1] || "None"),
     type: String(row[CONFIG.COL_TYPE - 1] || "Private"),
     projectName: String(row[CONFIG.COL_PROJECT_NAME - 1] || ""),
@@ -845,23 +881,30 @@ function parseRowToTask(row) {
 }
 
 /**
- * 日付オブジェクトを yyyy-MM-dd フォーマットの文字列に変換
+ * 日付オブジェクトを yyyy-MM-dd フォーマットの文字列に超高速変換（V8ネイティブ処理・IPC呼び出しゼロ）
  */
 function formatDate(dateVal) {
   if (dateVal instanceof Date) {
-    if (isNaN(dateVal.getTime())) return "";
-    return Utilities.formatDate(dateVal, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const t = dateVal.getTime();
+    if (isNaN(t)) return "";
+    const y = dateVal.getFullYear();
+    const m = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const d = String(dateVal.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
   return String(dateVal || "");
 }
 
 /**
- * 時間オブジェクトを HH:mm フォーマットの文字列に変換
+ * 時間オブジェクトを HH:mm フォーマットの文字列に超高速変換（V8ネイティブ処理・IPC呼び出しゼロ）
  */
 function formatTime(timeVal) {
   if (timeVal instanceof Date) {
-    if (isNaN(timeVal.getTime())) return "";
-    return Utilities.formatDate(timeVal, Session.getScriptTimeZone(), "HH:mm");
+    const t = timeVal.getTime();
+    if (isNaN(t)) return "";
+    const hh = String(timeVal.getHours()).padStart(2, "0");
+    const mm = String(timeVal.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
   }
   return String(timeVal || "");
 }
@@ -882,74 +925,170 @@ function getOrCreateTaskSheetByType(ss, type) {
 }
 
 /**
+ * タスクオブジェクトからスプレッドシート1行分の配列を生成する内部関数
+ */
+function buildTaskRowArray(taskData, taskId, taskType) {
+  const dateVal = taskData.date ? new Date(taskData.date.replace(/-/g, "/")) : "";
+  const baseDateStr = taskData.date || formatDate(new Date());
+  const startTimeVal = taskData.startTime ? parseTimeStringToDate(baseDateStr, taskData.startTime) : "";
+  const endTimeVal = taskData.endTime ? parseTimeStringToDate(baseDateStr, taskData.endTime) : "";
+
+  const rowArr = Array(CONFIG.COL_END_TIME).fill("");
+  rowArr[CONFIG.COL_ID - 1] = taskId;
+  rowArr[CONFIG.COL_STATUS - 1] = Boolean(taskData.status);
+  rowArr[CONFIG.COL_REPEAT - 1] = taskData.repeat || "None";
+  rowArr[CONFIG.COL_TYPE - 1] = taskType;
+  rowArr[CONFIG.COL_PROJECT_NAME - 1] = ""; // ARRAYFORMULA数式との衝突防止のため空文字
+  rowArr[CONFIG.COL_PROJECT - 1] = taskData.projectId || "";
+  rowArr[CONFIG.COL_TASK - 1] = taskData.task || "";
+  rowArr[CONFIG.COL_DATE_E - 1] = dateVal;
+  rowArr[CONFIG.COL_DESCRIPTION - 1] = taskData.description || "";
+  rowArr[CONFIG.COL_START_TIME - 1] = startTimeVal;
+  rowArr[CONFIG.COL_END_TIME - 1] = endTimeVal;
+  return rowArr;
+}
+
+/**
+ * 指定シートの有効データ領域を1回のgetValuesで取得し、メモリ上で追加/更新＆ソートして1回のsetValuesで書き戻す超高速関数
+ * （Write→Read→Writeによるスプレッドシート全体再計算フラッシュをゼロにする）
+ */
+function upsertAndSortInSheetMemory(ss, sheet, rowArr, targetId, allowInsert) {
+  const sheetLastRow = sheet.getLastRow();
+  const lastCol = CONFIG.COL_END_TIME;
+  let activeRows = [];
+
+  if (sheetLastRow >= 2) {
+    const allValues = sheet.getRange(2, 1, sheetLastRow - 1, lastCol).getValues();
+    let realCount = 0;
+    for (let i = allValues.length - 1; i >= 0; i--) {
+      if (allValues[i][CONFIG.COL_ID - 1] !== "" || allValues[i][CONFIG.COL_TASK - 1] !== "") {
+        realCount = i + 1;
+        break;
+      }
+    }
+    if (realCount > 0) {
+      activeRows = allValues.slice(0, realCount).map(r => r.slice(0, lastCol));
+    }
+  }
+
+  let foundIndex = -1;
+  if (targetId) {
+    for (let i = 0; i < activeRows.length; i++) {
+      if (String(activeRows[i][CONFIG.COL_ID - 1]).trim() === targetId) {
+        foundIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (foundIndex === -1 && !allowInsert) {
+    return false;
+  }
+
+  if (foundIndex >= 0) {
+    activeRows[foundIndex] = rowArr;
+  } else {
+    activeRows.push(rowArr);
+  }
+
+  const contextOrderMap = getContextOrderMap(ss);
+  sortTaskRowsInMemory(activeRows, contextOrderMap);
+
+  sheet.getRange(2, 1, activeRows.length, lastCol).setValues(activeRows);
+  return foundIndex >= 0 ? "updated" : "created";
+}
+
+/**
+ * タスクのUpsert（メモリ上一括更新・追加・ソートによりRead-after-Writeフラッシュを排除した超高速版）
+ */
+function upsertTaskFromApp(taskData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!taskData || !taskData.task || String(taskData.task).trim() === "") {
+    return { ok: false };
+  }
+
+  const rawId = taskData.id ? String(taskData.id).trim() : "";
+  const hasValidId = rawId !== "" && !rawId.startsWith("tmp_");
+  const targetId = hasValidId ? rawId : Utilities.getUuid().split("-")[0];
+  const taskType = taskData.type || getProjectTypeById(ss, taskData.projectId);
+  const targetSheet = getOrCreateTaskSheetByType(ss, taskType);
+  const rowArr = buildTaskRowArray(taskData, targetId, taskType);
+
+  // 1. まず別シート（Private <-> Biz）に同一IDが存在していないか確認（区分変更時の移動対応）
+  if (hasValidId) {
+    const otherSheetName = targetSheet.getName() === CONFIG.BIZ_SHEET_NAME ? CONFIG.PRIVATE_SHEET_NAME : CONFIG.BIZ_SHEET_NAME;
+    const otherSheet = ss.getSheetByName(otherSheetName);
+    if (otherSheet) {
+      const otherLastRow = otherSheet.getLastRow();
+      if (otherLastRow >= 2) {
+        const otherIds = otherSheet.getRange(2, CONFIG.COL_ID, otherLastRow - 1, 1).getValues();
+        for (let i = otherIds.length - 1; i >= 0; i--) {
+          if (String(otherIds[i][0]).trim() === targetId) {
+            otherSheet.deleteRow(i + 2);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. 対象シート上でメモリ内Upsert＋ソート＋1回の一括書き込みを実行
+  const mode = upsertAndSortInSheetMemory(ss, targetSheet, rowArr, targetId, true);
+  if (mode === "updated") {
+    return { ok: true, updatedTaskId: targetId };
+  }
+  return { ok: true, createdTaskId: targetId };
+}
+
+/**
  * アプリから新規タスクを追加（Private/Bizシートへ自動振り分け）
  */
 function addNewTaskFromApp(taskData) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!taskData || !taskData.task || String(taskData.task).trim() === "") {
-    return getInitialData();
-  }
-  const taskType = taskData.type || getProjectTypeById(ss, taskData.projectId);
-  const sheet = getOrCreateTaskSheetByType(ss, taskType);
-  
-  // 既存のIDがあり、かつ一時ID (tmp_) でなければ引き継ぎ、それ以外は常に新規UUIDを発行
-  const isTempId = !taskData.id || String(taskData.id).startsWith('tmp_');
-  const newId = !isTempId ? String(taskData.id) : Utilities.getUuid().split('-')[0];
-  const row = getRealLastRow(sheet) + 1;
-  
-  const dateVal = taskData.date ? new Date(taskData.date.replace(/-/g, "/")) : "";
-  const startTimeVal = taskData.startTime ? parseTimeStringToDate(taskData.date, taskData.startTime) : "";
-  const endTimeVal = taskData.endTime ? parseTimeStringToDate(taskData.date, taskData.endTime) : "";
-  
-  const newRow = Array(CONFIG.COL_END_TIME).fill("");
-  newRow[CONFIG.COL_ID - 1] = newId;
-  newRow[CONFIG.COL_STATUS - 1] = "FALSE";
-  newRow[CONFIG.COL_REPEAT - 1] = taskData.repeat || "None";
-  newRow[CONFIG.COL_TYPE - 1] = taskType;
-  newRow[CONFIG.COL_PROJECT_NAME - 1] = ""; // ARRAYFORMULA用（空文字）
-  newRow[CONFIG.COL_PROJECT - 1] = taskData.projectId || "";
-  newRow[CONFIG.COL_TASK - 1] = taskData.task || "";
-  newRow[CONFIG.COL_DATE_E - 1] = dateVal;
-  newRow[CONFIG.COL_START_TIME - 1] = startTimeVal;
-  newRow[CONFIG.COL_END_TIME - 1] = endTimeVal;
-  newRow[CONFIG.COL_DESCRIPTION - 1] = taskData.description || "";
-  
-  sheet.getRange(row, 1, 1, newRow.length).setValues([newRow]);
-  
-  sheet.getRange(row, CONFIG.COL_DATE_E).setNumberFormat("M/d(ddd)");
-  sheet.getRange(row, CONFIG.COL_START_TIME).setNumberFormat("hh:mm");
-  sheet.getRange(row, CONFIG.COL_END_TIME).setNumberFormat("hh:mm");
-  
-  SpreadsheetApp.flush();
-  sortAll(sheet);
-  
-  const initialData = getInitialData();
-  initialData.createdTaskId = newId;
-  return initialData;
+  return upsertTaskFromApp(taskData);
+}
+
+/**
+ * 既存行を1回のsetValuesで高速に一括更新する内部関数
+ */
+function updateTaskRowFast(ss, sheet, row, taskData) {
+  return upsertTaskFromApp(taskData);
+}
+
+/**
+ * アプリからタスクを編集（後方互換ラッパー）
+ */
+function updateTaskFromApp(taskData) {
+  return upsertTaskFromApp(taskData);
 }
 
 /**
  * 日付文字列と時間文字列からDateオブジェクトを生成
  */
 function parseTimeStringToDate(dateString, timeString) {
-  if (!dateString || !timeString) return "";
-  const d = new Date(dateString.replace(/-/g, "/"));
-  const parts = timeString.split(":");
+  if (!timeString) return "";
+  const base = dateString ? dateString.replace(/-/g, "/") : formatDate(new Date()).replace(/-/g, "/");
+  const d = new Date(base);
+  if (isNaN(d.getTime())) return "";
+  const parts = String(timeString).split(":");
+  if (parts.length < 2) return "";
   d.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
   return d;
 }
 
 /**
- * タスクIDから該当シートと行番号を検索（見つからない場合はタスク名でフォールバック検索）
+ * タスクIDから該当シートと行番号を検索（preferredTypeが指定されていれば該当シートを最優先で検索）
  */
-function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includeDoneSheet) {
-  const candidateNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME, CONFIG.OLD_SHEET_NAME];
+function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includeDoneSheet, preferredType) {
+  const isBiz = String(preferredType || "").toUpperCase() === "BIZ";
+  const candidateNames = isBiz
+    ? [CONFIG.BIZ_SHEET_NAME, CONFIG.PRIVATE_SHEET_NAME]
+    : [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME];
   if (includeDoneSheet) {
     candidateNames.push(CONFIG.DONE_SHEET_NAME);
   }
   
   // 1. まず taskId で完全一致検索
   if (taskId) {
+    const targetIdStr = String(taskId).trim();
     for (let name of candidateNames) {
       const sheet = ss.getSheetByName(name);
       if (!sheet) continue;
@@ -959,7 +1098,7 @@ function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includ
 
       const ids = sheet.getRange(2, CONFIG.COL_ID, lastRow - 1, 1).getValues();
       for (let i = 0; i < ids.length; i++) {
-        if (String(ids[i][0]).trim() === String(taskId).trim()) {
+        if (String(ids[i][0]).trim() === targetIdStr) {
           return { sheet: sheet, row: i + 2 };
         }
       }
@@ -1018,68 +1157,57 @@ function findTaskLocationById(ss, taskId, fallbackTaskName, fallbackDate, includ
 }
 
 /**
- * アプリからタスクを編集
- */
-function updateTaskFromApp(taskData) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const location = findTaskLocationById(ss, taskData.id, taskData.task, taskData.date);
-  
-  if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskData.id);
-  
-  const { sheet, row } = location;
-  const newType = taskData.type || getProjectTypeById(ss, taskData.projectId);
-  const isBizType = String(newType).toUpperCase() === "BIZ";
-  const expectedSheetName = isBizType ? CONFIG.BIZ_SHEET_NAME : CONFIG.PRIVATE_SHEET_NAME;
-
-  // もしタスクの種類（Private/Biz）が変更されて別シートへ移動が必要な場合
-  if (sheet.getName() !== expectedSheetName && (sheet.getName() === CONFIG.PRIVATE_SHEET_NAME || sheet.getName() === CONFIG.BIZ_SHEET_NAME || sheet.getName() === CONFIG.OLD_SHEET_NAME)) {
-    // 既存シートから削除し、新しいシートへ追加（IDは保持）
-    sheet.deleteRow(row);
-    addNewTaskFromApp(taskData);
-    return getInitialData();
-  }
-
-  const dateVal = taskData.date ? new Date(taskData.date.replace(/-/g, "/")) : "";
-  const startTimeVal = taskData.startTime ? parseTimeStringToDate(taskData.date, taskData.startTime) : "";
-  const endTimeVal = taskData.endTime ? parseTimeStringToDate(taskData.date, taskData.endTime) : "";
-  
-  sheet.getRange(row, CONFIG.COL_REPEAT).setValue(taskData.repeat || "None");
-  sheet.getRange(row, CONFIG.COL_TYPE).setValue(newType);
-  
-  // ARRAYFORMULA数式との衝突防止のため、E列(プロジェクト名)のセルをクリア
-  sheet.getRange(row, CONFIG.COL_PROJECT_NAME).clearContent();
-  
-  sheet.getRange(row, CONFIG.COL_PROJECT).setValue(taskData.projectId || "");
-  sheet.getRange(row, CONFIG.COL_TASK).setValue(taskData.task || "");
-  sheet.getRange(row, CONFIG.COL_DATE_E).setValue(dateVal);
-  sheet.getRange(row, CONFIG.COL_START_TIME).setValue(startTimeVal);
-  sheet.getRange(row, CONFIG.COL_END_TIME).setValue(endTimeVal);
-  sheet.getRange(row, CONFIG.COL_DESCRIPTION).setValue(taskData.description || "");
-  
-  sheet.getRange(row, CONFIG.COL_DATE_E).setNumberFormat("M/d(ddd)");
-  sheet.getRange(row, CONFIG.COL_START_TIME).setNumberFormat("hh:mm");
-  sheet.getRange(row, CONFIG.COL_END_TIME).setNumberFormat("hh:mm");
-  
-  SpreadsheetApp.flush();
-  sortAll(sheet);
-  
-  return getInitialData();
-}
-
-/**
  * アプリからタスクを完了処理（IDで見つからない場合はタスク名と期日でフォールバック検索）
  */
 function completeTaskFromApp(taskId, taskName, taskDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const location = findTaskLocationById(ss, taskId, taskName, taskDate);
+  const location = findTaskLocationById(ss, taskId, taskName, taskDate, false);
   
-  if (!location) throw new Error("指定されたタスクが見つかりません。ID: " + taskId + (taskName ? ` (名前: ${taskName})` : ""));
+  if (!location) {
+    return { ok: true, completedTaskId: taskId, alreadyCompleted: true };
+  }
   
   const { sheet, row } = location;
-  sheet.getRange(row, CONFIG.COL_STATUS).setValue(true);
-  processTaskCompletion(ss, sheet, row);
+  const repeatedTask = processTaskCompletion(ss, sheet, row);
   
-  return getInitialData();
+  return { ok: true, completedTaskId: taskId, repeatedTask: repeatedTask || null };
+}
+
+/**
+ * アプリから完了タスクを未完了に戻す処理
+ */
+function uncompleteTaskFromApp(taskId, taskData) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  // 完了タスクシートから優先検索
+  const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
+  if (doneSheet && taskId) {
+    const lastRow = doneSheet.getLastRow();
+    if (lastRow >= 2) {
+      const maxSearchRows = Math.min(lastRow - 1, 300);
+      const ids = doneSheet.getRange(2, CONFIG.COL_ID, maxSearchRows, 1).getValues();
+      const targetIdStr = String(taskId).trim();
+      for (let i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === targetIdStr) {
+          const foundRow = i + 2;
+          const lastCol = Math.max(doneSheet.getLastColumn(), CONFIG.COL_END_TIME);
+          const rowData = doneSheet.getRange(foundRow, 1, 1, lastCol).getValues()[0];
+          doneSheet.deleteRow(foundRow);
+
+          const restoredTask = taskData || parseRowToTask(rowData);
+          restoredTask.id = targetIdStr;
+          restoredTask.status = false;
+          return addNewTaskFromApp(restoredTask);
+        }
+      }
+    }
+  }
+
+  if (taskData) {
+    taskData.status = false;
+    return upsertTaskFromApp(taskData);
+  }
+
+  return { ok: true, uncompletedTaskId: taskId };
 }
 
 /**
@@ -1111,11 +1239,9 @@ function addNewProjectFromApp(projectData) {
   }
   
   const targetRow = lastRow + 1;
-  sheet.getRange(targetRow, 1).setValue(newId);
-  sheet.getRange(targetRow, 2).setValue(newName);
-  sheet.getRange(targetRow, 3).setValue(projectData.type || "Biz");
+  sheet.getRange(targetRow, 1, 1, 3).setValues([[newId, newName, projectData.type || "Biz"]]);
+  cachedProjectTypes = null;
   
-  SpreadsheetApp.flush();
   return getInitialData();
 }
 
@@ -1164,9 +1290,11 @@ function updateProjectFromApp(projectId, newName, newType) {
     if (newType && (newType === "Biz" || newType === "Private")) {
       sheet.getRange(foundRow, 3).setValue(newType);
     }
+  } else if (newName) {
+    return addNewProjectFromApp({ id: projectId, name: newName, type: newType || "Biz" });
   }
+  cachedProjectTypes = null;
 
-  SpreadsheetApp.flush();
   return getInitialData();
 }
 
@@ -1182,42 +1310,78 @@ function deleteProjectFromApp(projectId, projectName) {
   if (lastRow < 2) return getInitialData();
 
   const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  for (let i = 0; i < values.length; i++) {
+  for (let i = values.length - 1; i >= 0; i--) {
     if (String(values[i][0]).trim() === String(projectId).trim() || String(values[i][1]).trim() === String(projectName).trim()) {
       sheet.deleteRow(i + 2);
       break;
     }
   }
+  cachedProjectTypes = null;
 
-  SpreadsheetApp.flush();
   return getInitialData();
 }
 
 /**
- * アプリからタスクを削除する（カレンダー同期やリピートは行わず、行を削除）
+ * アプリからタスクを高速削除する（まずPrivate/Bizを走査し、未発見時のみ完了シートを走査。ソート済みシートからの行削除は並び順が保たれるため再ソート不要）
  */
 function deleteTaskFromApp(taskId, taskName, fallbackDate) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  // 完了シートも含めて検索
-  const location = findTaskLocationById(ss, taskId, taskName, fallbackDate, true);
-  
-  if (!location) {
-    console.warn("指定されたタスクが見つかりませんでした。ID: " + taskId + ", Task: " + taskName);
-    const initialData = getInitialData();
-    initialData.deletedTaskId = taskId;
-    initialData.deleteNotFound = true;
-    return initialData;
+  let deletedCount = 0;
+
+  if (taskId && !String(taskId).startsWith("tmp_")) {
+    const targetIdStr = String(taskId).trim();
+
+    // 1. まずアクティブな未完了シート（Private, Biz）から検索・削除
+    const activeNames = [CONFIG.PRIVATE_SHEET_NAME, CONFIG.BIZ_SHEET_NAME];
+    activeNames.forEach(name => {
+      const sheet = ss.getSheetByName(name);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return;
+
+      const ids = sheet.getRange(2, CONFIG.COL_ID, lastRow - 1, 1).getValues();
+      for (let i = ids.length - 1; i >= 0; i--) {
+        if (String(ids[i][0]).trim() === targetIdStr) {
+          sheet.deleteRow(i + 2);
+          deletedCount++;
+        }
+      }
+    });
+
+    // 2. アクティブシートになかった場合のみ、完了タスクシートを検索・削除
+    if (deletedCount === 0) {
+      const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
+      if (doneSheet) {
+        const lastRow = doneSheet.getLastRow();
+        if (lastRow >= 2) {
+          const maxSearchRows = Math.min(lastRow - 1, 300);
+          const ids = doneSheet.getRange(2, CONFIG.COL_ID, maxSearchRows, 1).getValues();
+          for (let i = ids.length - 1; i >= 0; i--) {
+            if (String(ids[i][0]).trim() === targetIdStr) {
+              doneSheet.deleteRow(i + 2);
+              deletedCount++;
+            }
+          }
+        }
+      }
+    }
   }
-  
-  const { sheet, row } = location;
-  sheet.deleteRow(row);
-  SpreadsheetApp.flush();
-  sortAll(sheet);
-  
-  const initialData = getInitialData();
-  initialData.deletedTaskId = taskId;
-  initialData.deleteSuccess = true;
-  return initialData;
+
+  // 3. IDで見つからなかった場合のみ、タスク名と期日でフォールバック検索して削除
+  if (deletedCount === 0 && taskName) {
+    const location = findTaskLocationById(ss, null, taskName, fallbackDate, true);
+    if (location) {
+      location.sheet.deleteRow(location.row);
+      deletedCount++;
+    }
+  }
+
+  return {
+    ok: true,
+    deletedTaskId: taskId,
+    deleteSuccess: deletedCount > 0,
+    deleteNotFound: deletedCount === 0
+  };
 }
 
 /**
@@ -1269,11 +1433,9 @@ function saveContextFromApp(contextData) {
       if (ids.length > 0) newId = Math.max(...ids) + 1;
     }
     const targetRow = lastRow + 1;
-    sheet.getRange(targetRow, 1).setValue(newId);
-    sheet.getRange(targetRow, 2).setValue(cName);
+    sheet.getRange(targetRow, 1, 1, 2).setValues([[newId, cName]]);
   }
 
-  SpreadsheetApp.flush();
   return getInitialData();
 }
 
@@ -1289,14 +1451,13 @@ function deleteContextFromApp(contextId) {
   if (lastRow < 2) return getInitialData();
 
   const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (let i = 0; i < ids.length; i++) {
+  for (let i = ids.length - 1; i >= 0; i--) {
     if (String(ids[i][0]).trim() === String(contextId).trim()) {
       sheet.deleteRow(i + 2);
       break;
     }
   }
 
-  SpreadsheetApp.flush();
   return getInitialData();
 }
 
@@ -1324,4 +1485,3 @@ function updateSortOrderFromApp(idList) {
   // 並び順更新を受け取り、最新のタスクデータを返却
   return getInitialData();
 }
-

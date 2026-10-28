@@ -2065,6 +2065,138 @@
     });
 
     // ----------------------------------
+    // 0ベース新設計：確定ID採番 ＆ 直列同期キュー（Sync Queue）エンジン
+    // ----------------------------------
+
+    // クライアント側で即座に確定8桁ID（UUID先頭8文字）を発行（仮ID tmp_ を全廃）
+    function generateTaskId() {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID().split('-')[0];
+      }
+      return Math.random().toString(16).substring(2, 10).padEnd(8, '0');
+    }
+
+    // 削除済みタスクIDのトゥームストーン（墓標）管理（古い通信レスポンスによるゾンビ復活を100%遮断）
+    const DELETED_IDS_SESSION_KEY = 'smart_task_deleted_ids_session';
+    const deletedTaskIds = new Set((() => {
+      try {
+        const raw = sessionStorage.getItem(DELETED_IDS_SESSION_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    })());
+
+    function markTaskDeleted(id) {
+      if (!id) return;
+      deletedTaskIds.add(String(id));
+      try {
+        sessionStorage.setItem(DELETED_IDS_SESSION_KEY, JSON.stringify(Array.from(deletedTaskIds)));
+      } catch (e) {}
+    }
+
+    // 状態世代カウンター（ユーザー操作のたびにインクリメントし、古い通信結果による画面の巻き戻しを防止）
+    let mutationVersion = 0;
+    const syncQueue = [];
+    let isProcessingQueue = false;
+
+    // インライン編集中かどうかを判定（編集中はバックグラウンド同期によるテーブル再描画を保留して入力欄を守る）
+    function isUserInlineEditing() {
+      const tbody = document.getElementById('task-table-body');
+      if (tbody && tbody.querySelector('.inline-edit-input, .inline-edit-select, .inline-time-container')) {
+        return true;
+      }
+      if (typeof datePickerState !== 'undefined' && datePickerState && datePickerState.isOpen) {
+        return true;
+      }
+      return false;
+    }
+
+    // 更新系リクエストを直列キューに追加（同一タスクへの連続編集は自動統合、削除時は未送信の編集を自動キャンセル）
+    function enqueueMutation(action, payload = {}, options = {}) {
+      mutationVersion++;
+      const currentVer = mutationVersion;
+      const taskId = options.taskId ? String(options.taskId) : null;
+
+      if (taskId) {
+        if (action === 'deleteTask') {
+          // 削除対象タスクの未送信リクエスト（作成・更新・完了）がキューにあれば取り消す
+          for (let i = syncQueue.length - 1; i >= 0; i--) {
+            if (syncQueue[i].taskId === taskId && syncQueue[i].action !== 'deleteTask') {
+              syncQueue.splice(i, 1);
+            }
+          }
+        } else if (action === 'saveTask') {
+          // 同一タスクの未送信 saveTask がキューにあれば最新データに上書き統合して通信回数を削減
+          const existing = syncQueue.find(item => item.taskId === taskId && item.action === 'saveTask');
+          if (existing) {
+            existing.payload = JSON.parse(JSON.stringify(payload));
+            existing.version = currentVer;
+            setSyncStatus('同期中...', true);
+            processSyncQueue();
+            return;
+          }
+        }
+      }
+
+      syncQueue.push({
+        action,
+        payload: JSON.parse(JSON.stringify(payload)),
+        version: currentVer,
+        taskId,
+        onError: options.onError || null
+      });
+
+      setSyncStatus('同期中...', true);
+      processSyncQueue();
+    }
+
+    // キューを1件ずつ順番（FIFO）に処理し、全キュー完了時のみサーバー状態と整合させる
+    async function processSyncQueue() {
+      if (isProcessingQueue) return;
+      isProcessingQueue = true;
+
+      while (syncQueue.length > 0) {
+        const item = syncQueue.shift();
+        setSyncStatus('同期中...', true);
+
+        try {
+          const res = await callBackendApi(item.action, item.payload);
+
+          // リピートタスク完了時に次回タスクが自動生成された場合は即座に追加
+          if (res && res.repeatedTask && res.repeatedTask.id && !deletedTaskIds.has(String(res.repeatedTask.id))) {
+            const exists = state.tasks.some(t => String(t.id) === String(res.repeatedTask.id));
+            if (!exists) {
+              state.tasks.push(res.repeatedTask);
+              saveToCache();
+              if (!isUserInlineEditing()) {
+                renderAll();
+              }
+            }
+          }
+
+          // プロジェクト・コンテキスト更新等で全データ（res.tasks）が返却され、かつ全キュー完了・新規操作なしの場合のみ反映
+          if (syncQueue.length === 0 && item.version === mutationVersion && res && res.tasks) {
+            applyInitialData(res);
+          }
+        } catch (err) {
+          console.error(`同期エラー (${item.action}):`, err);
+          if (item.onError) {
+            try { item.onError(err); } catch (e) {}
+          } else {
+            showToast('スプレッドシートとの同期に失敗しました');
+          }
+          setSyncStatus('同期エラー', false);
+        }
+      }
+
+      isProcessingQueue = false;
+      if (syncQueue.length === 0) {
+        setSyncStatus('同期完了', false);
+      }
+    }
+
+    // ----------------------------------
     // 通信レイヤー
     // ----------------------------------
     async function callBackendApi(action, payload = {}) {
@@ -2075,13 +2207,18 @@
             const api = runner.withSuccessHandler(resolve).withFailureHandler(reject);
             if (action === 'getInitialData') api.getInitialData();
             else if (action === 'saveTask') {
-              if (payload.taskData && payload.taskData.id) api.updateTaskFromApp(payload.taskData);
+              if (api.upsertTaskFromApp) api.upsertTaskFromApp(payload.taskData);
+              else if (payload.taskData && payload.taskData.id) api.updateTaskFromApp(payload.taskData);
               else api.addNewTaskFromApp(payload.taskData);
             }
             else if (action === 'completeTask' || action === 'toggleTaskStatus') api.completeTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
+            else if (action === 'uncompleteTask') {
+              if (api.uncompleteTaskFromApp) api.uncompleteTaskFromApp(payload.taskId, payload.taskData);
+              else api.updateTaskFromApp(payload.taskData);
+            }
             else if (action === 'deleteTask') api.deleteTaskFromApp(payload.taskId, payload.taskName, payload.taskDate);
             else if (action === 'saveProject') {
-              if (payload.projectData && payload.projectData.id) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
+              if (payload.projectData && payload.projectData.id && !payload.projectData.isNew && !String(payload.projectData.id).startsWith('p_')) api.updateProjectFromApp(payload.projectData.id, payload.projectData.name, payload.projectData.type);
               else api.addNewProjectFromApp(payload.projectData);
             }
             else if (action === 'deleteProject') api.deleteProjectFromApp(payload.projectId, payload.projectName);
@@ -2097,10 +2234,10 @@
         // GET リクエスト（クエリパラメータ）を第一優先で利用して安全に通信します。
         const payloadStr = JSON.stringify(payload);
         const sep = gasApiUrl.includes('?') ? '&' : '?';
-        const getUrl = `${gasApiUrl}${sep}action=${encodeURIComponent(action)}&payload=${encodeURIComponent(payloadStr)}`;
+        const getUrl = `${gasApiUrl}${sep}action=${encodeURIComponent(action)}&payload=${encodeURIComponent(payloadStr)}&_t=${Date.now()}`;
 
         if (getUrl.length < 2000) {
-          const res = await fetch(getUrl, { method: 'GET' });
+          const res = await fetch(getUrl, { method: 'GET', cache: 'no-store' });
           const text = await res.text();
           let json;
           try {
@@ -2219,12 +2356,11 @@
       showToast('フォルダを番号・名前順（A→Z）に整列しました 🔤');
     }
 
-    // キャッシュ読み込み
+    // キャッシュ保存
     function saveToCache() {
       try {
-        // 一時ID (tmp_...) のタスクは確定していないためキャッシュ保存から除外して重複・ゾンビ化を防止
-        const safeTasks = (state.tasks || []).filter(t => !t.id || !String(t.id).startsWith('tmp_'));
-        const safeDoneTasks = (state.doneTasks || []).filter(t => !t.id || !String(t.id).startsWith('tmp_'));
+        const safeTasks = (state.tasks || []).filter(t => t.id && !deletedTaskIds.has(String(t.id)));
+        const safeDoneTasks = (state.doneTasks || []).filter(t => t.id && !deletedTaskIds.has(String(t.id)));
         localStorage.setItem(CACHE_DATA_KEY, JSON.stringify({
           tasks: safeTasks,
           projects: state.projects,
@@ -2243,15 +2379,19 @@
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && parsed.tasks) {
-            state.tasks = (parsed.tasks || []).map(t => {
-              if (t.description) t.description = getContextDisplayName(t.description);
-              return t;
-            });
+            state.tasks = (parsed.tasks || [])
+              .filter(t => t.id && !deletedTaskIds.has(String(t.id)))
+              .map(t => {
+                if (t.description) t.description = getContextDisplayName(t.description);
+                return t;
+              });
             state.projects = applySavedFolderOrder(parsed.projects || []);
-            state.doneTasks = (parsed.doneTasks || []).map(t => {
-              if (t.description) t.description = getContextDisplayName(t.description);
-              return t;
-            });
+            state.doneTasks = (parsed.doneTasks || [])
+              .filter(t => t.id && !deletedTaskIds.has(String(t.id)))
+              .map(t => {
+                if (t.description) t.description = getContextDisplayName(t.description);
+                return t;
+              });
             state.contexts = (parsed.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
 
             renderAll();
@@ -2270,22 +2410,27 @@
       state.contexts = (data.contexts || []).filter(c => c.name && isNaN(Number(c.name)));
       state.projects = applySavedFolderOrder(data.projects || []);
 
-      // 2. バックエンドから届いた未完了タスク（未確定の一時ID tmp_... を排除し、本番IDのみ）
+      // 2. バックエンドから届いた未完了タスク（削除済みIDは完全に除外）
       state.tasks = (data.tasks || [])
-        .filter(t => t.id && !String(t.id).startsWith('tmp_'))
+        .filter(t => t.id && !String(t.id).startsWith('tmp_') && !deletedTaskIds.has(String(t.id)))
         .map(t => {
           if (t.description) t.description = getContextDisplayName(t.description);
           return t;
         });
 
-      // 3. 完了タスク一覧の更新（完了シートの履歴）
-      const incomingDone = (data.doneTasks || []).map(t => {
-        if (t.description) t.description = getContextDisplayName(t.description);
-        return t;
-      });
+      // 3. 完了タスク一覧の更新（完了シートの履歴、削除済みIDは除外）
+      const incomingDone = (data.doneTasks || [])
+        .filter(t => t.id && !deletedTaskIds.has(String(t.id)))
+        .map(t => {
+          if (t.description) t.description = getContextDisplayName(t.description);
+          return t;
+        });
+
       // 本日完了したタスク（24時をまたいだら自動消去）は手元からも保護し、同期時の反映ラグで消えるのを完全に防止
       const completedTodayIds = new Set(getCompletedTodayIds());
-      const preservedTodayDone = (state.doneTasks || []).filter(t => completedTodayIds.has(String(t.id)));
+      const preservedTodayDone = (state.doneTasks || []).filter(t =>
+        completedTodayIds.has(String(t.id)) && !deletedTaskIds.has(String(t.id))
+      );
 
       const doneMap = new Map();
       // まずサーバーから届いたものを登録
@@ -2298,23 +2443,30 @@
       });
       state.doneTasks = Array.from(doneMap.values());
 
-      // 4. キャッシュ保存と画面描画
+      // 4. キャッシュ保存と画面描画（インライン編集中はテーブル再描画をスキップして入力フォーカスを保護）
       saveToCache();
-      renderAll();
+      if (!isUserInlineEditing()) {
+        renderAll();
+      }
     }
 
-    // 初期データ取得
+    // 初期データ取得（起動中にユーザー操作が行われた場合は古いデータで上書きしない）
     async function fetchInitialData() {
+      const startVersion = mutationVersion;
       setSyncStatus('同期中...', true);
       try {
         const data = await callBackendApi('getInitialData');
-        if (data) {
+        if (data && mutationVersion === startVersion && syncQueue.length === 0 && !isProcessingQueue) {
           applyInitialData(data);
+          setSyncStatus('同期完了', false);
+        } else if (syncQueue.length === 0 && !isProcessingQueue) {
           setSyncStatus('同期完了', false);
         }
       } catch (e) {
         console.warn('初期取得失敗:', e);
-        setSyncStatus('オフライン/キャッシュ', false);
+        if (syncQueue.length === 0 && !isProcessingQueue) {
+          setSyncStatus('オフライン/キャッシュ', false);
+        }
       }
     }
 
@@ -2611,20 +2763,13 @@
       renderAll();
       showToast(`フォルダ「${newName}」(${newType}) を保存しました 📁`);
 
-      try {
-        setSyncStatus('保存中...', true);
-        await callBackendApi('saveProject', {
-          projectData: {
-            id: projId,
-            name: newName,
-            type: newType
-          }
-        });
-        setSyncStatus('同期完了', false);
-      } catch (err) {
-        console.error('フォルダ更新エラー:', err);
-        showToast('フォルダ更新の同期に失敗しました');
-      }
+      enqueueMutation('saveProject', {
+        projectData: {
+          id: projId,
+          name: newName,
+          type: newType
+        }
+      });
     }
 
     function hideCurrentProjectFromModal() {
@@ -2690,17 +2835,11 @@
       }
 
       saveFolderOrder();
+      saveToCache();
       renderAll();
       showToast(`フォルダ「${currentName}」を削除しました 🗑️`);
 
-      try {
-        setSyncStatus('削除中...', true);
-        await callBackendApi('deleteProject', { projectId: projId, projectName: currentName });
-        setSyncStatus('同期完了', false);
-      } catch (err) {
-        console.error('フォルダ削除エラー:', err);
-        showToast('フォルダ削除の同期に失敗しました');
-      }
+      enqueueMutation('deleteProject', { projectId: projId, projectName: currentName });
     }
 
     function selectFolder(folderKey) {
@@ -3550,51 +3689,22 @@
       select.onblur = () => finish(false);
     }
 
-    // 新規作成中タスクの通信完了を待機するためのPromiseマップ
-    const pendingCreationPromises = new Map();
-
-    // 共通インライン更新関数
+    // 共通インライン更新関数（確定ID＋直列同期キュー方式）
     async function updateTaskInline(taskId, updates) {
-      let targetId = String(taskId);
-
-      // もし仮ID（作成中タスク）であれば、新規登録通信の完了（本番ID確定）を待機
-      if (targetId.startsWith('tmp_')) {
-        const pending = pendingCreationPromises.get(targetId);
-        if (pending) {
-          setSyncStatus('タスク確定待ち...', true);
-          try {
-            const realId = await pending.promise;
-            if (realId) targetId = String(realId);
-          } catch (e) {
-            console.error('新規作成待ちエラー:', e);
-            return;
-          }
-        }
-      }
-
+      const targetId = String(taskId);
       const task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
       if (!task) return;
 
       Object.assign(task, updates);
+      saveToCache();
       renderAll();
       showToast('保存しました');
 
-      try {
-        setSyncStatus('保存中...', true);
-        const res = await callBackendApi('saveTask', { taskData: task });
-        if (res && res.tasks) {
-          applyInitialData(res);
-        }
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('インライン保存エラー:', e);
-        showToast('保存に失敗しました');
-        setSyncStatus('エラー', false);
-      }
+      enqueueMutation('saveTask', { taskData: { ...task } }, { taskId: targetId });
     }
 
     // ----------------------------------
-    // Quick Add Task 処理（二重送信完全防止 & 排他制御付き）
+    // Quick Add Task 処理（確定ID即時採番 ＆ 直列同期キュー方式）
     // ----------------------------------
     let isQuickAddSubmitting = false;
 
@@ -3609,83 +3719,45 @@
       isQuickAddSubmitting = true;
       if (addBtn) addBtn.disabled = true;
 
-      // プロジェクト判定（現在選択中のフォルダ）
-      let projName = state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder' ? state.selectedFolder : '';
-      let projObj = state.projects.find(p => p.name === projName);
-      let projId = projObj ? projObj.id : '';
-
-      // 期日（カレンダーで日付が選ばれていればその日付、そうでなければ今日）
-      let dueDate = state.selectedDate || getTodayString();
-
-      const tempId = 'tmp_' + Date.now();
-      const newTask = {
-        id: tempId,
-        task: text,
-        projectName: projName,
-        projectId: projId,
-        date: dueDate,
-        startTime: '',
-        endTime: '',
-        repeat: 'None',
-        description: '',
-        type: projObj ? projObj.type : 'Biz',
-        status: false
-      };
-
-      // 先行操作（日付変更等）が来ても本番IDを待てるようにPromiseを登録
-      let resolveCreation, rejectCreation;
-      const creationPromise = new Promise((resolve, reject) => {
-        resolveCreation = resolve;
-        rejectCreation = reject;
-      });
-      pendingCreationPromises.set(tempId, {
-        promise: creationPromise,
-        resolve: resolveCreation,
-        reject: rejectCreation
-      });
-
-      // 楽観的UI更新
-      state.tasks.unshift(newTask);
-      if (input) input.value = '';
-      renderAll();
-      showToast('タスクを追加しました');
-
-      // バックエンド通信
       try {
-        setSyncStatus('保存中...', true);
-        const payloadTask = { ...newTask, id: '' };
-        const res = await callBackendApi('saveTask', { taskData: payloadTask });
+        // プロジェクト判定（現在選択中のフォルダ）
+        let projName = state.selectedFolder !== 'All' && state.selectedFolder !== 'No Folder' ? state.selectedFolder : '';
+        let projObj = state.projects.find(p => p.name === projName);
+        let projId = projObj ? projObj.id : '';
 
-        // 本番IDを解決
-        const realId = (res && res.createdTaskId) ? res.createdTaskId : null;
-        if (realId) {
-          newTask.id = realId;
-          resolveCreation(realId);
-        } else {
-          resolveCreation(tempId);
-        }
-        pendingCreationPromises.delete(tempId);
+        // 期日（カレンダーで日付が選ばれていればその日付、そうでなければ今日）
+        let dueDate = state.selectedDate || getTodayString();
 
-        if (res && res.tasks) {
-          applyInitialData(res);
-        }
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('タスク追加エラー:', e);
-        rejectCreation(e);
-        pendingCreationPromises.delete(tempId);
-        // エラー時は画面の一時タスクを削除してロールバック
-        state.tasks = state.tasks.filter(t => t.id !== tempId);
+        // 最初から確定8桁UUIDを発行（tmp_ 仮IDを廃止）
+        const newId = generateTaskId();
+        const newTask = {
+          id: newId,
+          task: text,
+          projectName: projName,
+          projectId: projId,
+          date: dueDate,
+          startTime: '',
+          endTime: '',
+          repeat: 'None',
+          description: '',
+          type: projObj ? projObj.type : 'Biz',
+          status: false
+        };
+
+        state.tasks.unshift(newTask);
+        if (input) input.value = '';
+        saveToCache();
         renderAll();
-        showToast('保存に失敗しました: ' + (e.message || ''));
-        setSyncStatus('エラー', false);
+        showToast('タスクを追加しました');
+
+        enqueueMutation('saveTask', { taskData: { ...newTask } }, { taskId: newId });
       } finally {
         isQuickAddSubmitting = false;
         if (addBtn) addBtn.disabled = false;
       }
     }
 
-    // 完了ステータス切り替え（完了時は即座に一覧から消去し、履歴へ移動）
+    // 完了ステータス切り替え（当日完了維持 ＆ 直列同期キュー方式）
     async function handleToggleStatus(taskId) {
       const taskIdStr = String(taskId);
       let task = state.tasks.find(t => String(t.id) === taskIdStr);
@@ -3717,32 +3789,24 @@
       saveToCache();
       renderAll();
 
-      try {
-        setSyncStatus('更新中...', true);
-        let resData = null;
-        if (isCompleting) {
-          resData = await callBackendApi('completeTask', { 
-            taskId: task.id,
-            taskName: task.task,
-            taskDate: task.date
-          });
-        } else {
-          resData = await callBackendApi('saveTask', { taskData: { ...task, status: false } });
-        }
-        if (resData && resData.tasks) {
-          applyInitialData(resData);
-        }
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('完了エラー:', e);
-        showToast('更新に失敗しました');
-        setSyncStatus('エラー', false);
+      if (isCompleting) {
+        enqueueMutation('completeTask', {
+          taskId: task.id,
+          taskName: task.task,
+          taskDate: task.date
+        }, { taskId: taskIdStr });
+      } else {
+        enqueueMutation('uncompleteTask', {
+          taskId: task.id,
+          taskData: { ...task, status: false }
+        }, { taskId: taskIdStr });
       }
     }
 
     // スターのトグル（最優先フラグ）
     async function toggleStar(taskId) {
-      const task = state.tasks.find(t => t.id === taskId);
+      const targetId = String(taskId);
+      const task = state.tasks.find(t => String(t.id) === targetId);
       if (!task) return;
 
       const isStarred = (task.description || '').includes('最優先');
@@ -3752,13 +3816,10 @@
         task.description = ('最優先 ' + (task.description || '')).trim();
       }
 
+      saveToCache();
       renderTaskTable();
 
-      try {
-        await callBackendApi('saveTask', { taskData: task });
-      } catch (e) {
-        console.error('スター更新エラー:', e);
-      }
+      enqueueMutation('saveTask', { taskData: { ...task } }, { taskId: targetId });
     }
 
     // ----------------------------------
@@ -3846,105 +3907,48 @@
       isModalSubmitting = true;
       if (saveBtn) saveBtn.disabled = true;
 
-      let targetId = id;
-      if (targetId && String(targetId).startsWith('tmp_')) {
-        const pending = pendingCreationPromises.get(targetId);
-        if (pending) {
-          try {
-            const realId = await pending.promise;
-            if (realId) targetId = String(realId);
-          } catch (e) {
-            console.error('モーダル保存待機エラー:', e);
-          }
-        }
-      }
-
-      const isNewTask = !targetId || String(targetId).startsWith('tmp_');
-      const tempId = isNewTask ? ('tmp_' + Date.now()) : targetId;
-
-      const projSelect = document.getElementById('task-project-select');
-      const selectedProjId = projSelect ? projSelect.value : '';
-      const selectedProj = state.projects.find(p => String(p.id) === String(selectedProjId));
-
-      const taskData = {
-        id: tempId,
-        task: title,
-        projectName: selectedProj ? selectedProj.name : '',
-        projectId: selectedProj ? selectedProj.id : '',
-        date: document.getElementById('task-date-input').value,
-        startTime: document.getElementById('task-start-input').value,
-        endTime: document.getElementById('task-end-input').value,
-        repeat: document.getElementById('task-repeat-select').value,
-        description: document.getElementById('task-context-select').value,
-        type: document.getElementById('task-type-select').value,
-        status: false
-      };
-
-      // 編集前のバックアップ（エラー時のロールバック用）
-      const previousTasks = [...state.tasks];
-
-      closeModal();
-
-      if (!isNewTask) {
-        const idx = state.tasks.findIndex(t => String(t.id) === targetId);
-        if (idx !== -1) state.tasks[idx] = taskData;
-      } else {
-        // 新規作成Promiseを登録
-        let resolveCreation, rejectCreation;
-        const creationPromise = new Promise((resolve, reject) => {
-          resolveCreation = resolve;
-          rejectCreation = reject;
-        });
-        pendingCreationPromises.set(tempId, {
-          promise: creationPromise,
-          resolve: resolveCreation,
-          reject: rejectCreation
-        });
-        state.tasks.unshift(taskData);
-      }
-
-      renderAll();
-      showToast('保存中...');
-
       try {
-        setSyncStatus('保存中...', true);
-        const payloadData = { ...taskData };
-        if (isNewTask) payloadData.id = ''; // 新規登録時はIDを空にして確実に新規追加APIを呼ぶ
-        const res = await callBackendApi('saveTask', { taskData: payloadData });
+        const isNewTask = !id || String(id).startsWith('tmp_');
+        const finalId = isNewTask ? generateTaskId() : String(id);
 
-        if (isNewTask) {
-          const realId = (res && res.createdTaskId) ? res.createdTaskId : null;
-          const pending = pendingCreationPromises.get(tempId);
-          if (pending) {
-            if (realId) {
-              taskData.id = realId;
-              pending.resolve(realId);
-            } else {
-              pending.resolve(tempId);
-            }
-            pendingCreationPromises.delete(tempId);
-          }
+        const projSelect = document.getElementById('task-project-select');
+        const selectedProjId = projSelect ? projSelect.value : '';
+        const selectedProj = state.projects.find(p => String(p.id) === String(selectedProjId));
+
+        const existingTask = !isNewTask
+          ? (state.tasks.find(t => String(t.id) === finalId) || state.doneTasks.find(t => String(t.id) === finalId))
+          : null;
+
+        const taskData = {
+          id: finalId,
+          task: title,
+          projectName: selectedProj ? selectedProj.name : '',
+          projectId: selectedProj ? selectedProj.id : '',
+          date: document.getElementById('task-date-input').value,
+          startTime: document.getElementById('task-start-input').value,
+          endTime: document.getElementById('task-end-input').value,
+          repeat: document.getElementById('task-repeat-select').value,
+          description: document.getElementById('task-context-select').value,
+          type: document.getElementById('task-type-select').value,
+          status: existingTask ? Boolean(existingTask.status) : false
+        };
+
+        closeModal();
+
+        if (!isNewTask) {
+          const idx = state.tasks.findIndex(t => String(t.id) === finalId);
+          if (idx !== -1) state.tasks[idx] = taskData;
+          const doneIdx = state.doneTasks.findIndex(t => String(t.id) === finalId);
+          if (doneIdx !== -1) state.doneTasks[doneIdx] = taskData;
+        } else {
+          state.tasks.unshift(taskData);
         }
 
-        if (res && res.tasks) {
-          applyInitialData(res);
-        }
-        showToast('保存しました');
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('保存エラー:', e);
-        if (isNewTask) {
-          const pending = pendingCreationPromises.get(tempId);
-          if (pending) {
-            pending.reject(e);
-            pendingCreationPromises.delete(tempId);
-          }
-        }
-        // エラー時はロールバック
-        state.tasks = previousTasks;
+        saveToCache();
         renderAll();
-        showToast('保存に失敗しました: ' + (e.message || ''));
-        setSyncStatus('エラー', false);
+        showToast('保存しました');
+
+        enqueueMutation('saveTask', { taskData: { ...taskData } }, { taskId: finalId });
       } finally {
         isModalSubmitting = false;
         if (saveBtn) saveBtn.disabled = false;
@@ -3971,22 +3975,26 @@
         return;
       }
 
+      const maxExistingId = (state.projects || []).reduce((max, p) => {
+        const num = Number(p.id);
+        return !isNaN(num) && num > max ? num : max;
+      }, 99);
+
       const newProj = {
-        id: 'p_' + Date.now(),
+        id: String(maxExistingId + 1),
         name: trimmedName,
-        type: 'Biz'
+        type: 'Biz',
+        isNew: true
       };
 
       state.projects.push(newProj);
       state.selectedFolder = newProj.name;
+      saveFolderOrder();
+      saveToCache();
       renderAll();
       showToast(`フォルダ「${newProj.name}」を作成しました`);
 
-      try {
-        await callBackendApi('saveProject', { projectData: newProj });
-      } catch (e) {
-        console.error('フォルダ作成エラー:', e);
-      }
+      enqueueMutation('saveProject', { projectData: newProj });
     }
 
     // 区分選択変更時：フォルダ一覧を絞り込み
@@ -4108,19 +4116,11 @@
       if (!state.contexts) state.contexts = [];
       state.contexts.push(newCtx);
       state.selectedContext = trimmedName;
+      saveToCache();
       renderAll();
       showToast(`コンテキスト「@ ${trimmedName}」を作成しました`);
 
-      try {
-        setSyncStatus('保存中...', true);
-        const res = await callBackendApi('saveContext', { contextData: newCtx });
-        if (res && res.contexts) state.contexts = res.contexts;
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('コンテキスト作成エラー:', e);
-        showToast('コンテキストの保存に失敗しました');
-        setSyncStatus('エラー', false);
-      }
+      enqueueMutation('saveContext', { contextData: newCtx });
     }
 
     // コンテキスト編集ダイアログ
@@ -4145,17 +4145,11 @@
         state.selectedContext = trimmed;
       }
 
+      saveToCache();
       renderAll();
       showToast(`コンテキスト名を「@ ${trimmed}」に更新しました`);
 
-      try {
-        setSyncStatus('保存中...', true);
-        await callBackendApi('saveContext', { contextData: { id: contextId, name: trimmed } });
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('コンテキスト更新エラー:', e);
-        showToast('更新の同期に失敗しました');
-      }
+      enqueueMutation('saveContext', { contextData: { id: contextId, name: trimmed } });
     }
 
     // コンテキスト削除
@@ -4170,17 +4164,11 @@
         state.selectedContext = 'All';
       }
 
+      saveToCache();
       renderAll();
       showToast(`コンテキスト「@ ${contextName}」を削除しました`);
 
-      try {
-        setSyncStatus('削除中...', true);
-        await callBackendApi('deleteContext', { contextId: contextId });
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('コンテキスト削除エラー:', e);
-        showToast('削除の同期に失敗しました');
-      }
+      enqueueMutation('deleteContext', { contextId: contextId });
     }
 
     // ナビゲーションレイル切り替え
@@ -4399,35 +4387,24 @@
     }
 
     // ----------------------------------
-    // タスク複製 & 削除
+    // タスク複製 & 削除（確定ID ＆ トゥームストーン完全保護）
     // ----------------------------------
     async function cloneTask(taskId) {
-      const original = state.tasks.find(t => t.id === taskId) || state.doneTasks.find(t => t.id === taskId);
+      const targetId = String(taskId);
+      const original = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
       if (!original) return;
 
       const cloned = JSON.parse(JSON.stringify(original));
-      cloned.id = 'tmp_' + Date.now();
+      cloned.id = generateTaskId();
       cloned.task = cloned.task + ' (コピー)';
       cloned.status = false;
 
       state.tasks.unshift(cloned);
+      saveToCache();
       renderAll();
       showToast('タスクを複製しました 📋');
 
-      try {
-        setSyncStatus('保存中...', true);
-        const res = await callBackendApi('saveTask', { taskData: cloned });
-        if (res && res.tasks) {
-          applyInitialData(res);
-        }
-        setSyncStatus('同期完了', false);
-      } catch (e) {
-        console.error('複製エラー:', e);
-        state.tasks = state.tasks.filter(t => t.id !== cloned.id);
-        renderAll();
-        showToast('複製の保存に失敗しました');
-        setSyncStatus('エラー', false);
-      }
+      enqueueMutation('saveTask', { taskData: { ...cloned } }, { taskId: cloned.id });
     }
 
     async function deleteTaskRow(taskId, event) {
@@ -4436,50 +4413,38 @@
       const targetId = String(taskId);
       const task = state.tasks.find(t => String(t.id) === targetId) || state.doneTasks.find(t => String(t.id) === targetId);
       const taskTitle = task ? (task.task || '無題') : 'このタスク';
+      const taskName = task ? task.task : '';
+      const taskDate = task ? task.date : '';
 
       if (!confirm(`タスク「${taskTitle}」を削除しますか？`)) return;
 
-      // 1. 対象の行を視覚的に半透明化＆操作無効化（処理中であることを明示）
+      // 1. 墓標（トゥームストーン）へ即時登録＆メモリ・キャッシュから確定除去（他操作や古い通信による復活を100%遮断）
+      markTaskDeleted(targetId);
+      removeCompletedTodayId(targetId);
+      state.tasks = state.tasks.filter(t => String(t.id) !== targetId);
+      state.doneTasks = state.doneTasks.filter(t => String(t.id) !== targetId);
+      saveToCache();
+
+      // 2. 直列同期キューへ削除リクエストを登録（未送信の同一タスク編集があれば自動キャンセル）
+      enqueueMutation('deleteTask', {
+        taskId: targetId,
+        taskName: taskName,
+        taskDate: taskDate
+      }, { taskId: targetId });
+
+      // 3. 自然な0.4秒のフェード＆スライドアウトアニメーション後にテーブルを再描画
       const rowEl = document.getElementById(`task-row-${targetId}`);
       if (rowEl) {
-        rowEl.style.opacity = '0.35';
+        rowEl.style.transition = 'opacity 0.38s ease, transform 0.38s ease';
+        rowEl.style.opacity = '0';
+        rowEl.style.transform = 'translateX(12px)';
         rowEl.style.pointerEvents = 'none';
       }
 
-      setSyncStatus('削除中...', true);
-
-      try {
-        const res = await callBackendApi('deleteTask', { 
-          taskId: targetId, 
-          taskName: task ? task.task : '',
-          taskDate: task ? task.date : ''
-        });
-
-        // 2. バックエンドから最新確定データを受け取って画面・キャッシュを完全同期
-        removeCompletedTodayId(targetId);
-        if (res && res.tasks) {
-          applyInitialData(res);
-          showToast('タスクを削除しました 🗑️');
-          setSyncStatus('同期完了', false);
-        } else {
-          // 万一リストが直接返らない場合でも手元から確実に除去
-          state.tasks = state.tasks.filter(t => String(t.id) !== targetId);
-          state.doneTasks = state.doneTasks.filter(t => String(t.id) !== targetId);
-          saveToCache();
-          renderAll();
-          showToast('タスクを削除しました 🗑️');
-          setSyncStatus('同期完了', false);
-        }
-      } catch (e) {
-        console.error('削除エラー:', e);
-        if (rowEl) {
-          rowEl.style.opacity = '1';
-          rowEl.style.pointerEvents = 'auto';
-        }
-        showToast('削除に失敗しました');
-        setSyncStatus('エラー', false);
-        alert('タスクの削除に失敗しました。\n通信状況やGAS URLをご確認ください。\n\n詳細: ' + e.message);
-      }
+      setTimeout(() => {
+        renderAll();
+        showToast('タスクを削除しました 🗑️');
+      }, 380);
     }
 
     // ----------------------------------
