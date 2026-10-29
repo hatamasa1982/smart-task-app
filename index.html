@@ -1604,6 +1604,9 @@
     
     <!-- 1. 最左列ナビゲーションレイル -->
     <nav class="nav-rail">
+      <button class="rail-btn" id="rail-btn-all" onclick="showAllTasksByDate()" data-tooltip="All Tasks (全タスク・日付順)">
+        <span class="material-symbols-outlined">playlist_add_check</span>
+      </button>
       <button class="rail-btn" id="rail-btn-calendar" onclick="setRailMode('calendar')" data-tooltip="Calendar (カレンダー)">
         <span class="material-symbols-outlined">calendar_month</span>
       </button>
@@ -1612,9 +1615,6 @@
       </button>
       <button class="rail-btn" id="rail-btn-contexts" onclick="setRailMode('contexts')" data-tooltip="Contexts (コンテキスト)">
         <span style="font-weight: bold; font-size: 17px; font-family: monospace;">@</span>
-      </button>
-      <button class="rail-btn" id="rail-btn-all" onclick="selectFolder('All')" data-tooltip="All Tasks (全タスク)">
-        <span class="material-symbols-outlined">playlist_add_check</span>
       </button>
       <button class="rail-btn" id="rail-btn-history" onclick="toggleCompletedTasksView()" data-tooltip="Completed Tasks (完了タスク)">
         <span class="material-symbols-outlined">history</span>
@@ -2840,6 +2840,22 @@
       showToast(`フォルダ「${currentName}」を削除しました 🗑️`);
 
       enqueueMutation('deleteProject', { projectId: projId, projectName: currentName });
+    }
+
+    function showAllTasksByDate() {
+      state.selectedFolder = 'All';
+      state.selectedContext = 'All';
+      state.selectedDate = null;
+      state.showCompleted = false;
+      state.sortField = 'dueDate';
+      if (state.railMode === 'contexts') {
+        state.railMode = 'folders';
+      }
+      const sortSelect = document.getElementById('sort-select');
+      if (sortSelect) sortSelect.value = 'dueDate';
+      saveViewState();
+      if (window.innerWidth <= 768) closeSidebar();
+      renderAll();
     }
 
     function selectFolder(folderKey) {
