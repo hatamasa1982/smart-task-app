@@ -2976,8 +2976,16 @@
       let taskList = [];
 
       if (state.showCompleted) {
-        // 完了タスク履歴全件表示モード
-        taskList = [...state.doneTasks];
+        // 完了タスク履歴表示モード（画面のカクつき防止のため最新200件を表示）
+        taskList = state.doneTasks.slice(0, 200);
+      } else if (state.selectedDate) {
+        // カレンダーで日付が選択されている場合：未完了タスク + その日付の完了タスクを表示
+        const uncompleted = state.tasks.filter(t => !t.status);
+        const activeIds = new Set(uncompleted.map(t => String(t.id)));
+        const doneForSelectedDate = state.doneTasks
+          .filter(t => t.date === state.selectedDate && !activeIds.has(String(t.id)))
+          .map(t => ({ ...t, status: true }));
+        taskList = [...uncompleted, ...doneForSelectedDate];
       } else {
         // 通常モード: 未完了タスク一覧
         const uncompleted = state.tasks.filter(t => !t.status);
@@ -3032,7 +3040,8 @@
       const displayedActive = taskList.filter(t => !t.status).length;
       const displayedDone = taskList.filter(t => t.status).length;
       if (footerStats) {
-        footerStats.innerText = `Displayed Tasks: ${displayedActive} active${displayedDone > 0 ? `, ${displayedDone} completed today` : ''} (Total: ${activeCount} active, ${completedCount} completed)`;
+        const doneLabel = state.selectedDate ? 'completed' : 'completed today';
+        footerStats.innerText = `Displayed Tasks: ${displayedActive} active${displayedDone > 0 ? `, ${displayedDone} ${doneLabel}` : ''} (Total: ${activeCount} active, ${completedCount} completed)`;
       }
 
       if (taskList.length === 0) {
@@ -3098,7 +3107,9 @@
         const tomorrowStr = getOffsetDateString(1);
         const day7Str = getOffsetDateString(7);
 
-        groups.past = { label: 'Due in the past', icon: 'warning', list: [] };
+        groups.past = (state.selectedDate && state.selectedDate < todayStr)
+          ? { label: `${formatMonthDayWithDayOfWeek(state.selectedDate)}`, icon: 'event', list: [] }
+          : { label: 'Due in the past', icon: 'warning', list: [] };
         groups.today = { label: `Today (${formatMonthDayWithDayOfWeek(todayStr)})`, icon: 'today', list: [] };
         groups.tomorrow = { label: `Tomorrow (${formatMonthDayWithDayOfWeek(tomorrowStr)})`, icon: 'event', list: [] };
 
@@ -3114,7 +3125,9 @@
           daysMap[dStr] = key;
         }
 
-        groups.later = { label: '8日以降 (Later)', icon: 'calendar_month', list: [] };
+        groups.later = (state.selectedDate && state.selectedDate > day7Str)
+          ? { label: `${formatMonthDayWithDayOfWeek(state.selectedDate)}`, icon: 'event', list: [] }
+          : { label: '8日以降 (Later)', icon: 'calendar_month', list: [] };
         groups.nodate = { label: 'No Due Date', icon: 'help_outline', list: [] };
 
         taskList.forEach(t => {

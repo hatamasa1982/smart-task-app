@@ -810,7 +810,7 @@ function getInitialData() {
     }
   });
   
-  // 3. 完了タスクデータ取得 (先頭2行目以降の最新履歴から最大200件を高速取得)
+  // 3. 完了タスクデータ取得 (先頭2行目以降の最新履歴から最大500件を高速取得)
   const doneSheet = ss.getSheetByName(CONFIG.DONE_SHEET_NAME);
   const doneTasks = [];
   const seenDoneIds = new Set();
@@ -824,7 +824,7 @@ function getInitialData() {
   if (doneSheet) {
     const doneLastRow = doneSheet.getLastRow();
     if (doneLastRow >= 2) {
-      const maxRows = Math.min(doneLastRow, 201);
+      const maxRows = Math.min(doneLastRow, 501);
       const lastCol = Math.max(doneSheet.getLastColumn(), CONFIG.COL_END_TIME);
       const values = doneSheet.getRange(1, 1, maxRows, lastCol).getValues();
       for (let i = 1; i < values.length; i++) {
@@ -1183,7 +1183,7 @@ function uncompleteTaskFromApp(taskId, taskData) {
   if (doneSheet && taskId) {
     const lastRow = doneSheet.getLastRow();
     if (lastRow >= 2) {
-      const maxSearchRows = Math.min(lastRow - 1, 300);
+      const maxSearchRows = Math.min(lastRow - 1, 500);
       const ids = doneSheet.getRange(2, CONFIG.COL_ID, maxSearchRows, 1).getValues();
       const targetIdStr = String(taskId).trim();
       for (let i = 0; i < ids.length; i++) {
@@ -1354,7 +1354,7 @@ function deleteTaskFromApp(taskId, taskName, fallbackDate) {
       if (doneSheet) {
         const lastRow = doneSheet.getLastRow();
         if (lastRow >= 2) {
-          const maxSearchRows = Math.min(lastRow - 1, 300);
+          const maxSearchRows = Math.min(lastRow - 1, 500);
           const ids = doneSheet.getRange(2, CONFIG.COL_ID, maxSearchRows, 1).getValues();
           for (let i = ids.length - 1; i >= 0; i--) {
             if (String(ids[i][0]).trim() === targetIdStr) {
