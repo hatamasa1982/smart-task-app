@@ -2306,6 +2306,30 @@
       return str.replace(/^@\s*/, '').trim();
     }
 
+    // リピート設定の表記揺れ（タイポ・日本語）を正規化するヘルパー関数
+    function normalizeRepeatType(repeatVal) {
+      if (!repeatVal) return 'None';
+      const str = String(repeatVal).trim();
+      const upper = str.toUpperCase();
+
+      if (upper === 'DAILY' || upper === 'DAIRY' || str === '毎日' || upper.startsWith('DAY')) {
+        return 'Daily';
+      }
+      if (upper === 'WEEKLY' || str === '毎週' || upper.startsWith('WEEK')) {
+        return 'Weekly';
+      }
+      if (upper === 'BIWEEKLY' || upper === 'BI-WEEKLY' || str === '隔週' || upper.includes('BIWEEK')) {
+        return 'Biweekly';
+      }
+      if (upper === 'MONTHLY' || upper === 'MONTLY' || upper === 'MONTYLY' || str === '毎月' || upper.startsWith('MONTH')) {
+        return 'Monthly';
+      }
+      if (upper === 'COPY' || str === 'コピー' || str === '完了時複製' || upper.startsWith('COP')) {
+        return 'Copy';
+      }
+      return 'None';
+    }
+
     const FOLDER_ORDER_KEY = 'smart_task_folder_order';
 
     // 保存されたフォルダ並び順を適用
@@ -3254,9 +3278,9 @@
             ${getContextDisplayName(task.description) ? `@ ${escapeHtml(getContextDisplayName(task.description))}` : '<span style="color:#cbd5e1;">-</span>'}
           </span>
         </td>
-        <td class="col-repeat ${(task.repeat && task.repeat !== 'None') ? '' : 'empty-badge'}" id="task-repeat-${task.id}">
-          <span class="editable-cell" onclick="startInlineEditRepeat(event, '${task.id}')" title="クリックしてリピート設定を変更" style="color: ${task.repeat && task.repeat !== 'None' ? '#0369a1' : '#94a3b8'}; font-size: 11.5px; font-weight: ${task.repeat && task.repeat !== 'None' ? '600' : 'normal'};">
-            ${task.repeat || 'None'}
+        <td class="col-repeat ${(normalizeRepeatType(task.repeat) !== 'None') ? '' : 'empty-badge'}" id="task-repeat-${task.id}">
+          <span class="editable-cell" onclick="startInlineEditRepeat(event, '${task.id}')" title="クリックしてリピート設定を変更" style="color: ${normalizeRepeatType(task.repeat) !== 'None' ? '#0369a1' : '#94a3b8'}; font-size: 11.5px; font-weight: ${normalizeRepeatType(task.repeat) !== 'None' ? '600' : 'normal'};">
+            ${escapeHtml(normalizeRepeatType(task.repeat))}
           </span>
         </td>
         <td class="col-actions">
@@ -3681,7 +3705,7 @@
       const task = state.tasks.find(t => t.id === taskId);
       if (!task) return;
 
-      const currentRepeat = task.repeat || 'None';
+      const currentRepeat = normalizeRepeatType(task.repeat);
       const repeatOptions = [
         { val: 'None', label: 'None (なし)' },
         { val: 'Daily', label: 'Daily (毎日)' },
@@ -3898,7 +3922,7 @@
       document.getElementById('task-date-input').value = task.date || '';
       document.getElementById('task-start-input').value = task.startTime || '';
       document.getElementById('task-end-input').value = task.endTime || '';
-      document.getElementById('task-repeat-select').value = task.repeat || 'None';
+      document.getElementById('task-repeat-select').value = normalizeRepeatType(task.repeat);
       
       const taskType = task.type || 'Biz';
       document.getElementById('task-type-select').value = taskType;

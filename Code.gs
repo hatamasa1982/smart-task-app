@@ -222,26 +222,72 @@ function processTaskCompletion(ss, sheet, row) {
 }
 
 /**
+ * リピート設定の表記揺れ（タイポ・日本語）を正規化するヘルパー関数
+ */
+function normalizeRepeatType(repeatVal) {
+  if (!repeatVal) return "None";
+  const str = String(repeatVal).trim();
+  const upper = str.toUpperCase();
+
+  if (upper === "DAILY" || upper === "DAIRY" || str === "毎日" || upper.startsWith("DAY")) {
+    return "Daily";
+  }
+  if (upper === "WEEKLY" || str === "毎週" || upper.startsWith("WEEK")) {
+    return "Weekly";
+  }
+  if (upper === "BIWEEKLY" || upper === "BI-WEEKLY" || str === "隔週" || upper.includes("BIWEEK")) {
+    return "Biweekly";
+  }
+  if (upper === "MONTHLY" || upper === "MONTLY" || upper === "MONTYLY" || str === "毎月" || upper.startsWith("MONTH")) {
+    return "Monthly";
+  }
+  if (upper === "COPY" || str === "コピー" || str === "完了時複製" || upper.startsWith("COP")) {
+    return "Copy";
+  }
+  return "None";
+}
+
+/**
+ * 月末オーバーフローを防止して安全に月を加算するヘルパー関数
+ */
+function addMonthsSafely(date, months) {
+  const origDay = date.getDate();
+  const target = new Date(date.getTime());
+  target.setDate(1);
+  target.setMonth(target.getMonth() + months);
+  const maxDaysInMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(origDay, maxDaysInMonth));
+  return target;
+}
+
+/**
  * リピートタスクを末尾に新規作成
  */
 function handleRepeatTask(sheet, rowData, repeatType) {
-  const rType = String(repeatType).toUpperCase();
+  const normType = normalizeRepeatType(repeatType);
+  if (normType === "None") return null;
+
   const rawDate = rowData[CONFIG.COL_DATE_E - 1];
   let nextDate = rawDate;
 
-  if (rType === "COPY") {
+  if (normType === "Copy") {
     // Copyの場合は期日を変更なし（そのまま維持）
     nextDate = rawDate;
   } else {
-    const currentDate = new Date(rawDate);
+    let currentDate = (rawDate instanceof Date) ? rawDate : new Date(rawDate);
     if (isNaN(currentDate.getTime())) {
       return null;
     }
-    const calculatedDate = new Date(currentDate.getTime());
-    if (rType === "DAILY") calculatedDate.setDate(calculatedDate.getDate() + 1);
-    else if (rType === "WEEKLY") calculatedDate.setDate(calculatedDate.getDate() + 7);
-    else if (rType === "BIWEEKLY") calculatedDate.setDate(calculatedDate.getDate() + 14);
-    else if (rType === "MONTHLY") calculatedDate.setMonth(calculatedDate.getMonth() + 1);
+    let calculatedDate = new Date(currentDate.getTime());
+    if (normType === "Daily") {
+      calculatedDate.setDate(calculatedDate.getDate() + 1);
+    } else if (normType === "Weekly") {
+      calculatedDate.setDate(calculatedDate.getDate() + 7);
+    } else if (normType === "Biweekly") {
+      calculatedDate.setDate(calculatedDate.getDate() + 14);
+    } else if (normType === "Monthly") {
+      calculatedDate = addMonthsSafely(currentDate, 1);
+    }
     nextDate = calculatedDate;
   }
 
@@ -251,14 +297,16 @@ function handleRepeatTask(sheet, rowData, repeatType) {
   newRowData[CONFIG.COL_DATE_E - 1] = nextDate; // 期日
   newRowData[CONFIG.COL_STATUS - 1] = false;  // 完了フラグを外す (false)
 
-  // Copyの場合は新タスクのRepeat設定を "None" に戻す
-  if (rType === "COPY") {
+  if (normType === "Copy") {
+    // Copyの場合は新タスクのRepeat設定を "None" に戻し、時間は引き継がない（クリアする）
     newRowData[CONFIG.COL_REPEAT - 1] = "None";
+    newRowData[CONFIG.COL_START_TIME - 1] = ""; 
+    newRowData[CONFIG.COL_END_TIME - 1] = "";
+  } else {
+    // Daily, Weekly, Biweekly, Monthly等のリピートタスクはRepeat設定を正規化し、開始時間・終了時間を引き継ぐ
+    newRowData[CONFIG.COL_REPEAT - 1] = normType;
+    // 開始時間(J列)と終了時間(K列)は rowData の値をそのまま保持して引き継ぐ
   }
-
-  // 開始時間と終了時間のコピーは不要のためクリアする
-  newRowData[CONFIG.COL_START_TIME - 1] = ""; 
-  newRowData[CONFIG.COL_END_TIME - 1] = "";
 
   // 本当にデータが有る行の下に追加
   const targetRow = getRealLastRow(sheet) + 1;
@@ -783,6 +831,14 @@ function getInitialData() {
             values[i][CONFIG.COL_ID - 1] = currentId;
           }
 
+          // リピート設定のタイポ（MontlyやDairy等）を自動修正
+          const origRepeat = String(values[i][CONFIG.COL_REPEAT - 1] || "");
+          const normRepeat = normalizeRepeatType(origRepeat);
+          if (origRepeat !== "" && origRepeat !== normRepeat && normRepeat !== "None") {
+            taskSheet.getRange(i + 1, CONFIG.COL_REPEAT).setValue(normRepeat);
+            values[i][CONFIG.COL_REPEAT - 1] = normRepeat;
+          }
+
           const taskObj = parseRowToTask(values[i]);
           // ARRAYFORMULAの再計算前でも確実にプロジェクト名を解決
           if (!taskObj.projectName && taskObj.projectId && idToProjectName[taskObj.projectId]) {
@@ -837,6 +893,14 @@ function getInitialData() {
             values[i][CONFIG.COL_ID - 1] = rowId;
           }
           if (!seenDoneIds.has(rowId) && !seenActiveIds.has(rowId)) {
+            // リピート設定のタイポ（MontlyやDairy等）を自動修正
+            const origRepeat = String(values[i][CONFIG.COL_REPEAT - 1] || "");
+            const normRepeat = normalizeRepeatType(origRepeat);
+            if (origRepeat !== "" && origRepeat !== normRepeat && normRepeat !== "None") {
+              doneSheet.getRange(i + 1, CONFIG.COL_REPEAT).setValue(normRepeat);
+              values[i][CONFIG.COL_REPEAT - 1] = normRepeat;
+            }
+
             const taskObj = parseRowToTask(values[i]);
             taskObj.status = true;
             if (!taskObj.projectName && taskObj.projectId && idToProjectName[taskObj.projectId]) {
@@ -868,7 +932,7 @@ function parseRowToTask(row) {
   return {
     id: String(row[CONFIG.COL_ID - 1]),
     status: row[CONFIG.COL_STATUS - 1] === true || String(row[CONFIG.COL_STATUS - 1]).toUpperCase() === "TRUE",
-    repeat: String(row[CONFIG.COL_REPEAT - 1] || "None"),
+    repeat: normalizeRepeatType(row[CONFIG.COL_REPEAT - 1]),
     type: String(row[CONFIG.COL_TYPE - 1] || "Private"),
     projectName: String(row[CONFIG.COL_PROJECT_NAME - 1] || ""),
     projectId: String(row[CONFIG.COL_PROJECT - 1] || ""),
@@ -936,7 +1000,7 @@ function buildTaskRowArray(taskData, taskId, taskType) {
   const rowArr = Array(CONFIG.COL_END_TIME).fill("");
   rowArr[CONFIG.COL_ID - 1] = taskId;
   rowArr[CONFIG.COL_STATUS - 1] = Boolean(taskData.status);
-  rowArr[CONFIG.COL_REPEAT - 1] = taskData.repeat || "None";
+  rowArr[CONFIG.COL_REPEAT - 1] = normalizeRepeatType(taskData.repeat);
   rowArr[CONFIG.COL_TYPE - 1] = taskType;
   rowArr[CONFIG.COL_PROJECT_NAME - 1] = ""; // ARRAYFORMULA数式との衝突防止のため空文字
   rowArr[CONFIG.COL_PROJECT - 1] = taskData.projectId || "";
