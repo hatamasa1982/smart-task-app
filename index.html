@@ -4548,7 +4548,34 @@
     }
 
 
-    // 期日および開始時間によるタスクの並び替え（第1優先: 期日、第2優先: 開始時間、未設定は末尾）
+    // コンテキストの優先順位を取得（数値が小さいほど上位、未設定は末尾）
+    function getContextOrderRank(rawContext) {
+      const ctxName = getContextDisplayName(rawContext);
+      if (!ctxName) return 9999;
+
+      const fixedOrder = [
+        '最優先',
+        '優先',
+        '通常',
+        '翌日以降可',
+        '連絡待ち',
+        '簡単',
+        '隙間時間'
+      ];
+      const idx = fixedOrder.indexOf(ctxName);
+      if (idx !== -1) return idx;
+
+      // スプレッドシートのコンテキスト定義順（追加分があればその順番）
+      if (state.contexts && Array.isArray(state.contexts)) {
+        const customIdx = state.contexts.findIndex(c => (c.name || '').trim() === ctxName);
+        if (customIdx !== -1) return 100 + customIdx;
+      }
+
+      return 9000;
+    }
+
+    // 期日・開始時間・コンテキストによるタスクの並び替え
+    // （第1優先: 期日、第2優先: 開始時間、第3優先: コンテキスト順、未設定は末尾）
     function compareTasksByDateAndTime(a, b) {
       // 0. 完了タスクはグループ内の下部に配置（未完了タスクを優先）
       if (a.status !== b.status) {
@@ -4563,7 +4590,7 @@
         if (dDiff !== 0) return dDiff;
       }
 
-      // 2. 開始時間の比較（早い順、未設定は末尾）
+      // 2. 開始時間の比較（記載されているものを優先し早い順、未設定は後ろ）
       const aStart = (a.startTime || '').trim();
       const bStart = (b.startTime || '').trim();
       if (!aStart && bStart) return 1;
@@ -4573,7 +4600,14 @@
         if (sDiff !== 0) return sDiff;
       }
 
-      // 3. 終了時間の比較（早い順、未設定は末尾）
+      // 3. コンテキストの比較（最優先 → 優先 → 通常 → 翌日以降可 → 連絡待ち → 簡単 → 隙間時間 → なし）
+      const aCtxRank = getContextOrderRank(a.description);
+      const bCtxRank = getContextOrderRank(b.description);
+      if (aCtxRank !== bCtxRank) {
+        return aCtxRank - bCtxRank;
+      }
+
+      // 4. 終了時間の比較（早い順、未設定は末尾）
       const aEnd = (a.endTime || '').trim();
       const bEnd = (b.endTime || '').trim();
       if (!aEnd && bEnd) return 1;
@@ -4583,7 +4617,7 @@
         if (eDiff !== 0) return eDiff;
       }
 
-      // 4. タスク名順（昇順）
+      // 5. タスク名順（昇順）
       return (a.task || '').localeCompare(b.task || '', 'ja');
     }
 
